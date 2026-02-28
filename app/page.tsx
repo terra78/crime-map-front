@@ -2,21 +2,37 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useCallback } from 'react'
-import { fetchReports, Report } from './lib/api'
+import {
+  fetchReports, Report,
+  fetchPrefectureStats, PrefectureStat,
+  fetchPrefectureYears, fetchPrefectureCategories,
+} from './lib/api'
 import Sidebar from './components/Sidebar'
 
 // Leafletはサーバーサイドレンダリング不可なのでdynamic import
 const Map = dynamic(() => import('./components/Map'), { ssr: false })
 
 export default function Home() {
-  const [allReports, setAllReports]   = useState<Report[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [filter, setFilter]           = useState({
+  // ───── 投稿ピン state ─────
+  const [allReports, setAllReports] = useState<Report[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [filter, setFilter] = useState({
     incident_type: '全て',
     nationality_type: '全て',
   })
 
-  // 初回データ取得
+  // ───── レイヤー切り替え state ─────
+  const [layerMode, setLayerMode] = useState<'pins' | 'bubbles'>('pins')
+
+  // ───── 都道府県統計 state ─────
+  const [prefectureStats, setPrefectureStats]     = useState<PrefectureStat[]>([])
+  const [prefYears, setPrefYears]                 = useState<number[]>([])
+  const [prefCategories, setPrefCategories]       = useState<string[]>([])
+  const [prefYear, setPrefYear]                   = useState<number | null>(null)
+  const [prefCategory, setPrefCategory]           = useState<string>('全て')
+  const [prefLoading, setPrefLoading]             = useState(false)
+
+  // ───── 投稿ピン 初回取得 ─────
   useEffect(() => {
     fetchReports({ site_type_id: 1 }).then(data => {
       setAllReports(data)
@@ -24,7 +40,37 @@ export default function Home() {
     })
   }, [])
 
-  // フィルタリング
+  // ───── 都道府県統計メタ（年・罪種一覧）を初回取得 ─────
+  useEffect(() => {
+    Promise.all([fetchPrefectureYears(), fetchPrefectureCategories()]).then(
+      ([years, categories]) => {
+        setPrefYears(years)
+        setPrefCategories(categories)
+        // デフォルトは最新年
+        if (years.length > 0) setPrefYear(Math.max(...years))
+      }
+    )
+  }, [])
+
+  // ───── 都道府県統計データ取得（年 or 罪種が変わるたびに） ─────
+  useEffect(() => {
+    if (layerMode !== 'bubbles') return
+    setPrefLoading(true)
+    fetchPrefectureStats({
+      year: prefYear ?? undefined,
+      crime_category: prefCategory === '全て' ? undefined : prefCategory,
+    }).then(data => {
+      setPrefectureStats(data)
+      setPrefLoading(false)
+    })
+  }, [layerMode, prefYear, prefCategory])
+
+  // レイヤーを bubbles に切り替えたとき、まだデータがなければ取得
+  const handleLayerModeChange = useCallback((mode: 'pins' | 'bubbles') => {
+    setLayerMode(mode)
+  }, [])
+
+  // ───── 投稿ピン フィルタリング ─────
   const filteredReports = allReports.filter(r => {
     if (filter.incident_type !== '全て' && r.data?.incident_type !== filter.incident_type) return false
     if (filter.nationality_type !== '全て' && r.data?.nationality_type !== filter.nationality_type) return false
@@ -42,6 +88,15 @@ export default function Home() {
         reports={filteredReports}
         filter={filter}
         onFilterChange={setFilter}
+        layerMode={layerMode}
+        onLayerModeChange={handleLayerModeChange}
+        prefYear={prefYear}
+        prefYears={prefYears}
+        onPrefYearChange={setPrefYear}
+        prefCategory={prefCategory}
+        prefCategories={prefCategories}
+        onPrefCategoryChange={setPrefCategory}
+        prefLoading={prefLoading}
       />
 
       {/* 地図エリア（サイドバーの右側） */}
@@ -58,7 +113,11 @@ export default function Home() {
             <div>データを読み込み中...</div>
           </div>
         ) : (
-          <Map reports={filteredReports} />
+          <Map
+            reports={filteredReports}
+            prefectureStats={prefectureStats}
+            layerMode={layerMode}
+          />
         )}
       </div>
 

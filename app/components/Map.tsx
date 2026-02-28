@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Report } from '../lib/api'
+import { useEffect, useRef } from 'react'
+import { Report, PrefectureStat } from '../lib/api'
 
 const INCIDENT_COLORS: Record<string, string> = {
   '交通事故': '#F59E0B',
@@ -11,24 +11,21 @@ const INCIDENT_COLORS: Record<string, string> = {
   'その他':  '#6B7280',
 }
 
-const NATIONALITY_ICONS: Record<string, string> = {
-  '日本人':  '🔵',
-  '外国人':  '🔴',
-  '不明':    '⚪',
-}
-
 type Props = {
   reports: Report[]
+  prefectureStats?: PrefectureStat[]
+  layerMode?: 'pins' | 'bubbles'
   onBoundsChange?: (bounds: {
     min_lat: number; max_lat: number
     min_lng: number; max_lng: number
   }) => void
 }
 
-export default function Map({ reports, onBoundsChange }: Props) {
+export default function Map({ reports, prefectureStats = [], layerMode = 'pins', onBoundsChange }: Props) {
   const mapRef    = useRef<HTMLDivElement>(null)
   const mapObjRef = useRef<any>(null)
   const markersRef = useRef<any[]>([])
+  const bubblesRef = useRef<any[]>([])
 
   useEffect(() => {
     if (typeof window === 'undefined' || mapObjRef.current) return
@@ -64,14 +61,15 @@ export default function Map({ reports, onBoundsChange }: Props) {
     return () => { map.remove(); mapObjRef.current = null }
   }, [])
 
-  // マーカー更新
+  // ピンマーカー更新
   useEffect(() => {
     if (!mapObjRef.current) return
     const L = require('leaflet')
 
-    // 既存マーカーを削除
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
+
+    if (layerMode !== 'pins') return
 
     reports.forEach(r => {
       const color  = INCIDENT_COLORS[r.data?.incident_type || ''] || '#6B7280'
@@ -141,7 +139,79 @@ export default function Map({ reports, onBoundsChange }: Props) {
       marker.addTo(mapObjRef.current)
       markersRef.current.push(marker)
     })
-  }, [reports])
+  }, [reports, layerMode])
+
+  // バブルレイヤー更新
+  useEffect(() => {
+    if (!mapObjRef.current) return
+    const L = require('leaflet')
+
+    bubblesRef.current.forEach(c => c.remove())
+    bubblesRef.current = []
+
+    if (layerMode !== 'bubbles' || prefectureStats.length === 0) return
+
+    const maxCount = Math.max(...prefectureStats.map(s => s.count_recognized), 1)
+
+    prefectureStats.forEach(s => {
+      const ratio  = s.count_recognized / maxCount
+      const radius = Math.max(10, Math.log(s.count_recognized + 1) * 7)
+      // 件数が多いほど赤、少ないほどオレンジ
+      const r = Math.round(255)
+      const g = Math.round(160 * (1 - ratio))
+      const b = Math.round(20 * (1 - ratio))
+      const color = `rgb(${r},${g},${b})`
+
+      const circle = L.circleMarker([s.lat, s.lng], {
+        radius,
+        color,
+        fillColor: color,
+        fillOpacity: 0.55,
+        weight: 1.5,
+      })
+
+      circle.bindPopup(`
+        <div style="
+          background: #111827; color: #e2e8f0;
+          padding: 12px; border-radius: 8px;
+          font-family: 'Noto Sans JP', sans-serif;
+          min-width: 180px;
+        ">
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">
+            ${s.prefecture_name}
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+            ${s.year}年 / ${s.crime_category}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">認知件数</span>
+              <span style="color: #FF7043; font-weight: 600; font-family: monospace;">
+                ${s.count_recognized.toLocaleString()}
+              </span>
+            </div>
+            ${s.count_cleared != null ? `
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">検挙件数</span>
+              <span style="color: #e2e8f0; font-family: monospace;">
+                ${s.count_cleared.toLocaleString()}
+              </span>
+            </div>` : ''}
+            ${s.count_arrested != null ? `
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">検挙人員</span>
+              <span style="color: #e2e8f0; font-family: monospace;">
+                ${s.count_arrested.toLocaleString()}
+              </span>
+            </div>` : ''}
+          </div>
+        </div>
+      `)
+
+      circle.addTo(mapObjRef.current)
+      bubblesRef.current.push(circle)
+    })
+  }, [prefectureStats, layerMode])
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 }
