@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import DatePicker from '../components/DatePicker'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -27,6 +28,7 @@ type LatLng = { lat: number; lng: number }
 
 export default function SubmitPage() {
   const router = useRouter()
+  const { getToken, isSignedIn } = useAuth()
   const mapRef    = useRef<HTMLDivElement>(null)
   const mapObjRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
@@ -95,9 +97,13 @@ export default function SubmitPage() {
     if (!form.title) { setError('タイトルを入力してください'); return }
     setError(''); setSubmitting(true)
     try {
+      const token = isSignedIn ? await getToken() : null
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch(`${API_BASE}/api/reports`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           site_type_id:  siteType?.id ?? 1,
           title:         form.title,

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useCallback } from 'react'
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs'
 import {
   fetchReports, Report,
   fetchPrefectureStats, PrefectureStat,
@@ -46,7 +47,6 @@ export default function Home() {
       ([years, categories]) => {
         setPrefYears(years)
         setPrefCategories(categories)
-        // デフォルトは最新年
         if (years.length > 0) setPrefYear(Math.max(...years))
       }
     )
@@ -65,7 +65,6 @@ export default function Home() {
     })
   }, [layerMode, prefYear, prefCategory])
 
-  // レイヤーを bubbles に切り替えたとき、まだデータがなければ取得
   const handleLayerModeChange = useCallback((mode: 'pins' | 'bubbles') => {
     setLayerMode(mode)
   }, [])
@@ -121,10 +120,33 @@ export default function Home() {
         )}
       </div>
 
-      {/* 右上：投稿ボタン */}
+      {/* 右上：認証 + 投稿ボタン */}
       <div style={{
         position: 'absolute', top: 16, right: 16, zIndex: 1001,
+        display: 'flex', alignItems: 'center', gap: 8,
       }}>
+        <SignedOut>
+          <SignInButton mode="modal">
+            <button style={{
+              padding: '7px 14px',
+              background: 'transparent',
+              color: '#94a3b8',
+              border: '1px solid #1e2d40',
+              borderRadius: 6, fontSize: 13, cursor: 'pointer',
+            }}>
+              ログイン
+            </button>
+          </SignInButton>
+        </SignedOut>
+        <SignedIn>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: { width: 32, height: 32 },
+              },
+            }}
+          />
+        </SignedIn>
         <a href="/submit" style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '8px 16px',
