@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import DatePicker from '../components/DatePicker'
+import { getIncidentGroups, getCrimeCategory, getCrimeLaw } from '../lib/crimeTypes'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -23,6 +24,9 @@ type SiteType = {
   name:   string
   fields: FieldDef[]
 }
+
+// フォールバック: DBから取得できない場合は crimeTypes.ts の定義を使う
+const FALLBACK_INCIDENT_GROUPS = getIncidentGroups()
 
 type LatLng = { lat: number; lng: number }
 
@@ -58,13 +62,22 @@ export default function SubmitPage() {
       .then(r => r.json())
       .then((data: SiteType) => {
         setSiteType(data)
+        // 初期選択: groups の最初のオプション、なければフォールバックの最初
         const incidentField = data.fields?.find(f => f.key === 'incident_type')
-        if (incidentField?.options?.[0]) {
-          setForm(f => ({ ...f, incident_type: incidentField.options![0] }))
-        }
+        const firstOption =
+          incidentField?.groups?.[0]?.options?.[0] ||
+          incidentField?.options?.[0] ||
+          FALLBACK_INCIDENT_GROUPS[0]?.options?.[0] ||
+          ''
+        if (firstOption) setForm(f => ({ ...f, incident_type: firstOption }))
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch(() => {
+        // DB取得失敗時もフォールバックで動作
+        const firstOption = FALLBACK_INCIDENT_GROUPS[0]?.options?.[0] || ''
+        if (firstOption) setForm(f => ({ ...f, incident_type: firstOption }))
+        setLoading(false)
+      })
   }, [])
 
   // 地図初期化（ローディング完了後）
@@ -146,6 +159,8 @@ export default function SubmitPage() {
           source_url:    form.source_url || null,
           data: {
             incident_type:    form.incident_type,
+            crime_category:   getCrimeCategory(form.incident_type),
+            crime_law:        getCrimeLaw(form.incident_type),
             nationality_type: form.nationality_type,
             source_url:       form.source_url || null,
           },
@@ -162,7 +177,10 @@ export default function SubmitPage() {
 
   // DBから取得したフィールド
   const incidentField     = siteType?.fields?.find(f => f.key === 'incident_type')
-  const incidentOptions   = incidentField?.options ?? []
+  // groups があれば optgroup 形式、なければフォールバック
+  const incidentGroups    = incidentField?.groups?.length
+    ? incidentField.groups
+    : FALLBACK_INCIDENT_GROUPS
   const nationalityField  = siteType?.fields?.find(f => f.key === 'nationality_type')
   const nationalityGroups = nationalityField?.groups ?? []
 
@@ -227,7 +245,11 @@ export default function SubmitPage() {
             <div>
               <label style={S.label}>種別</label>
               <select style={S.select} value={form.incident_type} onChange={e => set('incident_type', e.target.value)}>
-                {incidentOptions.map(t => <option key={t}>{t}</option>)}
+                {incidentGroups.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>

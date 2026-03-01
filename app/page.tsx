@@ -9,6 +9,7 @@ import {
   fetchPrefectureYears, fetchPrefectureCategories,
 } from './lib/api'
 import Sidebar from './components/Sidebar'
+import { INCIDENT_TO_CATEGORY } from './lib/crimeTypes'
 
 // Leafletはサーバーサイドレンダリング不可なのでdynamic import
 const Map = dynamic(() => import('./components/Map'), { ssr: false })
@@ -20,7 +21,7 @@ export default function Home() {
   const [allReports, setAllReports] = useState<Report[]>([])
   const [loading, setLoading]       = useState(false)
   const [filter, setFilter] = useState({
-    incident_type: '全て',
+    crime_category: '全て',
     nationality_type: '全て',
   })
 
@@ -97,7 +98,14 @@ export default function Home() {
 
   // ───── 投稿ピン フィルタリング ─────
   const filteredReports = allReports.filter(r => {
-    if (filter.incident_type !== '全て' && r.data?.incident_type !== filter.incident_type) return false
+    if (filter.crime_category !== '全て') {
+      // crime_category が保存されていない旧データは incident_type から導出
+      const cat =
+        r.data?.crime_category ||
+        INCIDENT_TO_CATEGORY[r.data?.incident_type ?? ''] ||
+        'その他の刑法犯'
+      if (cat !== filter.crime_category) return false
+    }
     if (filter.nationality_type !== '全て') {
       const nat = r.data?.nationality_type
       if (filter.nationality_type === '日本人') {

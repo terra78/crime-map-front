@@ -5,18 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { fetchMyReports, updateMyReport, deleteMyReport, Report } from '../lib/api'
 import DatePicker from '../components/DatePicker'
-
-const INCIDENT_COLORS: Record<string, string> = {
-  '交通事故':           '#F59E0B',
-  '窃盗・万引き':       '#EF4444',
-  '暴行・傷害':         '#DC2626',
-  '詐欺':               '#8B5CF6',
-  '薬物':               '#EC4899',
-  '性犯罪':             '#F97316',
-  '殺人・傷害致死':     '#B91C1C',
-  '不法滞在・入管違反': '#6366F1',
-  'その他':             '#6B7280',
-}
+import {
+  getIncidentGroups,
+  getCrimeCategory,
+  getCrimeLaw,
+  getIncidentColor,
+} from '../lib/crimeTypes'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   pending:        { label: '審査待ち',   color: '#F59E0B', bg: '#F59E0B22' },
@@ -25,10 +19,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   rejected:       { label: '却下',       color: '#EF4444', bg: '#EF444422' },
 }
 
-const INCIDENT_OPTIONS = [
-  '交通事故', '窃盗・万引き', '暴行・傷害', '詐欺', '薬物',
-  '性犯罪', '殺人・傷害致死', '不法滞在・入管違反', 'その他',
-]
+const FALLBACK_INCIDENT_GROUPS = getIncidentGroups()
 
 const S = {
   input: {
@@ -68,7 +59,7 @@ function EditModal({
   })
   const [saving, setSaving]                           = useState(false)
   const [err, setErr]                                 = useState('')
-  const [incidentOptions, setIncidentOptions]         = useState<string[]>(INCIDENT_OPTIONS)
+  const [incidentGroups, setIncidentGroups]           = useState<FieldGroup[]>(FALLBACK_INCIDENT_GROUPS)
   const [nationalityGroups, setNationalityGroups]     = useState<FieldGroup[]>([])
   const [nationalityOptions, setNationalityOptions]   = useState<string[]>([])
   const [latlng, setLatlng] = useState<LatLng | null>(
@@ -113,13 +104,15 @@ function EditModal({
     finally { setSearching(false) }
   }
 
-  // site_type から選択肢を取得
+  // site_type から選択肢を取得（国籍はDBから、種別はフォールバック使用）
   useEffect(() => {
     fetch(`${API_BASE}/api/site_types/crime`)
       .then(r => r.json())
       .then((data: SiteTypeApi) => {
+        // 種別: groups があれば setIncidentGroups、なければフォールバック
         const incField = data.fields?.find(f => f.key === 'incident_type')
-        if (incField?.options?.length) setIncidentOptions(incField.options)
+        if (incField?.groups?.length) setIncidentGroups(incField.groups)
+        // （フォールバックは useState 初期値として既に設定済み）
 
         const natField = data.fields?.find(f => f.key === 'nationality_type')
         if (natField?.groups?.length)        setNationalityGroups(natField.groups)
@@ -185,6 +178,8 @@ function EditModal({
       lng:         latlng?.lng,
       data: {
         incident_type:    form.incident_type,
+        crime_category:   getCrimeCategory(form.incident_type),
+        crime_law:        getCrimeLaw(form.incident_type),
         nationality_type: form.nationality_type,
         source_url:       form.source_url || '',
       },
@@ -247,7 +242,11 @@ function EditModal({
             <div>
               <label style={S.label}>種別</label>
               <select style={{ ...S.input, cursor: 'pointer' }} value={form.incident_type} onChange={e => set('incident_type', e.target.value)}>
-                {incidentOptions.map(o => <option key={o}>{o}</option>)}
+                {incidentGroups.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>
@@ -426,8 +425,8 @@ export default function MyReportsPage() {
             <div style={{ fontSize: 12, color: '#475569', marginBottom: 16 }}>{reports.length} 件</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {reports.map(r => {
-                const incidentType = r.data?.incident_type || 'その他'
-                const color  = INCIDENT_COLORS[incidentType] || '#6B7280'
+                const incidentType = r.data?.incident_type || 'その他刑法犯'
+                const color  = getIncidentColor(incidentType)
                 const status = STATUS_CONFIG[r.status || 'pending']
                 return (
                   <div key={r.id} style={{ background: '#111827', border: '1px solid #1e2d40', borderRadius: 10, padding: '14px 16px' }}>

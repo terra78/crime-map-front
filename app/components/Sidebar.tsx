@@ -2,19 +2,12 @@
 
 import { useState } from 'react'
 import { Report } from '../lib/api'
-
-const INCIDENT_COLORS: Record<string, string> = {
-  '交通事故': '#F59E0B',
-  '窃盗':    '#EF4444',
-  '暴行':    '#DC2626',
-  '詐欺':    '#8B5CF6',
-  'その他':  '#6B7280',
-}
+import { ALL_CATEGORIES, CATEGORY_COLORS, INCIDENT_TO_CATEGORY } from '../lib/crimeTypes'
 
 type Props = {
   reports: Report[]
-  filter: { incident_type: string; nationality_type: string }
-  onFilterChange: (f: { incident_type: string; nationality_type: string }) => void
+  filter: { crime_category: string; nationality_type: string }
+  onFilterChange: (f: { crime_category: string; nationality_type: string }) => void
   // レイヤー切り替え
   layerMode: 'pins' | 'bubbles'
   onLayerModeChange: (mode: 'pins' | 'bubbles') => void
@@ -44,9 +37,14 @@ export default function Sidebar({
   }).length
   const total = reports.length
 
+  // 第2階層（crime_category）ごとの件数を集計
   const categoryCounts = reports.reduce((acc, r) => {
-    const t = r.data?.incident_type || 'その他'
-    acc[t] = (acc[t] || 0) + 1
+    // crime_category が保存されていない旧データは incident_type から導出
+    const cat =
+      r.data?.crime_category ||
+      INCIDENT_TO_CATEGORY[r.data?.incident_type ?? ''] ||
+      'その他の刑法犯'
+    acc[cat] = (acc[cat] || 0) + 1
     return acc
   }, {} as Record<string, number>)
 
@@ -177,32 +175,51 @@ export default function Sidebar({
                 </div>
               </div>
 
-              {/* フィルター：種別 */}
+              {/* フィルター：犯罪カテゴリ（第2階層） */}
               <div style={{ padding: '12px', borderBottom: '1px solid #1e2d40' }}>
                 <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8, letterSpacing: '0.1em' }}>
                   種別フィルター
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {['全て', '交通事故', '窃盗', '暴行', '詐欺', 'その他'].map(t => {
-                    const color = INCIDENT_COLORS[t] || '#e2e8f0'
-                    const count = t === '全て' ? total : (categoryCounts[t] || 0)
+                  {/* 全て */}
+                  <button
+                    onClick={() => onFilterChange({ ...filter, crime_category: '全て' })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 8px', fontSize: 11,
+                      border: `1px solid ${filter.crime_category === '全て' ? '#e2e8f0' : '#1e2d40'}`,
+                      background: filter.crime_category === '全て' ? '#e2e8f022' : '#111827',
+                      color: filter.crime_category === '全て' ? '#e2e8f0' : '#94a3b8',
+                      borderRadius: 4, cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>全て</span>
+                    <span style={{ fontFamily: 'monospace', color: '#475569' }}>{total}</span>
+                  </button>
+
+                  {/* 第2階層カテゴリ */}
+                  {ALL_CATEGORIES.map(cat => {
+                    const color = CATEGORY_COLORS[cat] || '#6B7280'
+                    const count = categoryCounts[cat] || 0
+                    const active = filter.crime_category === cat
                     return (
-                      <button key={t} onClick={() => onFilterChange({ ...filter, incident_type: t })}
+                      <button
+                        key={cat}
+                        onClick={() => onFilterChange({ ...filter, crime_category: cat })}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '6px 8px', fontSize: 11,
-                          border: `1px solid ${filter.incident_type === t ? color : '#1e2d40'}`,
-                          background: filter.incident_type === t ? `${color}22` : '#111827',
-                          color: filter.incident_type === t ? color : '#94a3b8',
+                          border: `1px solid ${active ? color : '#1e2d40'}`,
+                          background: active ? `${color}22` : '#111827',
+                          color: active ? color : '#94a3b8',
                           borderRadius: 4, cursor: 'pointer', textAlign: 'left',
-                        }}>
-                        {t !== '全て' && (
-                          <span style={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            background: color, flexShrink: 0,
-                          }} />
-                        )}
-                        <span style={{ flex: 1 }}>{t}</span>
+                        }}
+                      >
+                        <span style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: color, flexShrink: 0,
+                        }} />
+                        <span style={{ flex: 1 }}>{cat}</span>
                         <span style={{ fontFamily: 'monospace', color: '#475569' }}>{count}</span>
                       </button>
                     )
