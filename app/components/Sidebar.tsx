@@ -37,8 +37,11 @@ export default function Sidebar({
 }: Props) {
   const [collapsed, setCollapsed] = useState(false)
 
-  const jp    = reports.filter(r => r.data?.nationality_type === '日本人').length
-  const fg    = reports.filter(r => r.data?.nationality_type === '外国人').length
+  const jp    = reports.filter(r => r.data?.nationality_type === '日本').length
+  const fg    = reports.filter(r => {
+    const nat = r.data?.nationality_type
+    return nat && nat !== '日本' && nat !== '不明'
+  }).length
   const total = reports.length
 
   const categoryCounts = reports.reduce((acc, r) => {

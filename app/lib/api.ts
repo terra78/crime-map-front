@@ -64,6 +64,44 @@ export async function fetchMyReports(token: string): Promise<Report[]> {
   return res.json()
 }
 
+export type ReportUpdatePayload = {
+  title?: string
+  description?: string
+  address?: string
+  occurred_at?: string | null
+  source_url?: string | null
+  data?: Record<string, string>
+}
+
+export async function updateMyReport(
+  token: string,
+  id: number,
+  payload: ReportUpdatePayload,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function deleteMyReport(token: string, id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function fetchPrefectureStats(params?: {
   year?: number
   crime_category?: string

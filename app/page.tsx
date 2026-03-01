@@ -72,7 +72,14 @@ export default function Home() {
   // ───── 投稿ピン フィルタリング ─────
   const filteredReports = allReports.filter(r => {
     if (filter.incident_type !== '全て' && r.data?.incident_type !== filter.incident_type) return false
-    if (filter.nationality_type !== '全て' && r.data?.nationality_type !== filter.nationality_type) return false
+    if (filter.nationality_type !== '全て') {
+      const nat = r.data?.nationality_type
+      if (filter.nationality_type === '日本人') {
+        if (nat !== '日本') return false
+      } else if (filter.nationality_type === '外国人') {
+        if (!nat || nat === '日本' || nat === '不明') return false
+      }
+    }
     return true
   })
 
