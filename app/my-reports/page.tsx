@@ -38,6 +38,11 @@ const S = {
   label: { fontSize: 11, color: '#64748b', display: 'block', marginBottom: 4 },
 }
 
+type FieldGroup  = { label: string; options: string[] }
+type SiteTypeApi = { fields: { key: string; options?: string[]; groups?: FieldGroup[] }[] }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 // ── 編集モーダル ─────────────────────────────────────────────────────────────
 function EditModal({
   report,
@@ -59,8 +64,29 @@ function EditModal({
     occurred_at:      report.occurred_at ?? '',
     source_url:       report.data?.source_url ?? '',
   })
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState('')
+  const [saving, setSaving]               = useState(false)
+  const [err, setErr]                     = useState('')
+  const [incidentOptions, setIncidentOptions]       = useState<string[]>(INCIDENT_OPTIONS)
+  const [nationalityGroups, setNationalityGroups]   = useState<FieldGroup[]>([])
+  const [nationalityOptions, setNationalityOptions] = useState<string[]>([])
+
+  // site_typeからフィールド選択肢を取得
+  useEffect(() => {
+    fetch(`${API_BASE}/api/site_types/crime`)
+      .then(r => r.json())
+      .then((data: SiteTypeApi) => {
+        const incField = data.fields?.find(f => f.key === 'incident_type')
+        if (incField?.options?.length) setIncidentOptions(incField.options)
+
+        const natField = data.fields?.find(f => f.key === 'nationality_type')
+        if (natField?.groups?.length) {
+          setNationalityGroups(natField.groups)
+        } else if (natField?.options?.length) {
+          setNationalityOptions(natField.options)
+        }
+      })
+      .catch(() => {}) // 失敗時はデフォルト値を使用
+  }, [])
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -130,12 +156,21 @@ function EditModal({
             <div>
               <label style={S.label}>種別</label>
               <select style={{ ...S.input, cursor: 'pointer' }} value={form.incident_type} onChange={e => set('incident_type', e.target.value)}>
-                {INCIDENT_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                {incidentOptions.map(o => <option key={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label style={S.label}>関係者国籍</label>
-              <input style={S.input} value={form.nationality_type} onChange={e => set('nationality_type', e.target.value)} placeholder="例: 日本、中国" />
+              <select style={{ ...S.input, cursor: 'pointer' }} value={form.nationality_type} onChange={e => set('nationality_type', e.target.value)}>
+                {nationalityGroups.length > 0
+                  ? nationalityGroups.map(g => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                    ))
+                  : nationalityOptions.map(o => <option key={o} value={o}>{o}</option>)
+                }
+              </select>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
