@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   '/submit(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/admin(.*)',  // 管理画面は独自ADMIN_TOKENで認証するためClerk対象外
 ])
 
 export default clerkMiddleware((auth, req) => {

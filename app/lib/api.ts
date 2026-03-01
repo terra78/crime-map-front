@@ -87,3 +87,66 @@ export async function fetchPrefectureCategories(): Promise<string[]> {
   if (!res.ok) return []
   return res.json()
 }
+
+// ── Admin API ────────────────────────────────────────────────────────────────
+
+export type AdminReport = {
+  id: number
+  title: string | null
+  description: string | null
+  source_url: string | null
+  archive_url: string | null
+  ai_score: number | null
+  ai_reason: string | null
+  data: Record<string, string>
+  created_at: string
+}
+
+export type AdminStats = {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+}
+
+function adminHeaders(token: string) {
+  return { 'x-admin-token': token }
+}
+
+export async function fetchAdminQueue(token: string): Promise<AdminReport[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/queue`, { headers: adminHeaders(token) })
+    if (res.status === 401) return null
+    if (!res.ok) return []
+    return res.json()
+  } catch {
+    return []
+  }
+}
+
+export async function fetchAdminStats(token: string): Promise<AdminStats | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/stats`, { headers: adminHeaders(token) })
+    if (res.status === 401) return null
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function adminApprove(token: string, id: number): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/admin/approve/${id}`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  })
+  return res.ok
+}
+
+export async function adminReject(token: string, id: number): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/admin/reject/${id}`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  })
+  return res.ok
+}
