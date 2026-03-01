@@ -15,13 +15,14 @@ type Props = {
   reports: Report[]
   prefectureStats?: PrefectureStat[]
   layerMode?: 'pins' | 'bubbles'
+  searchTarget?: { lat: number; lng: number; zoom?: number } | null
   onBoundsChange?: (bounds: {
     min_lat: number; max_lat: number
     min_lng: number; max_lng: number
   }) => void
 }
 
-export default function Map({ reports, prefectureStats = [], layerMode = 'pins', onBoundsChange }: Props) {
+export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, onBoundsChange }: Props) {
   const mapRef    = useRef<HTMLDivElement>(null)
   const mapObjRef = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -60,6 +61,12 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
     mapObjRef.current = map
     return () => { map.remove(); mapObjRef.current = null }
   }, [])
+
+  // 外部からの地図移動（検索）
+  useEffect(() => {
+    if (!mapObjRef.current || !searchTarget) return
+    mapObjRef.current.setView([searchTarget.lat, searchTarget.lng], searchTarget.zoom ?? 13)
+  }, [searchTarget])
 
   // ピンマーカー更新
   useEffect(() => {

@@ -13,6 +13,8 @@ import Sidebar from './components/Sidebar'
 // Leafletはサーバーサイドレンダリング不可なのでdynamic import
 const Map = dynamic(() => import('./components/Map'), { ssr: false })
 
+type SearchTarget = { lat: number; lng: number; zoom?: number } | null
+
 export default function Home() {
   // ───── 投稿ピン state ─────
   const [allReports, setAllReports] = useState<Report[]>([])
@@ -21,6 +23,12 @@ export default function Home() {
     incident_type: '全て',
     nationality_type: '全て',
   })
+
+  // ───── 地図検索 state ─────
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [searching,    setSearching]    = useState(false)
+  const [searchError,  setSearchError]  = useState('')
+  const [searchTarget, setSearchTarget] = useState<SearchTarget>(null)
 
   // ───── レイヤー切り替え state ─────
   const [layerMode, setLayerMode] = useState<'pins' | 'bubbles'>('pins')
@@ -68,6 +76,24 @@ export default function Home() {
   const handleLayerModeChange = useCallback((mode: 'pins' | 'bubbles') => {
     setLayerMode(mode)
   }, [])
+
+  // ───── 地図検索（Nominatim）─────
+  const handleMapSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearching(true); setSearchError('')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&accept-language=ja&limit=1`,
+        { headers: { 'User-Agent': 'CrimeMapJapan/1.0' } }
+      )
+      const data = await res.json()
+      if (!data.length) { setSearchError('場所が見つかりませんでした'); return }
+      setSearchTarget({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), zoom: 13 })
+      setSearchError('')
+    } catch { setSearchError('検索に失敗しました') }
+    finally { setSearching(false) }
+  }
 
   // ───── 投稿ピン フィルタリング ─────
   const filteredReports = allReports.filter(r => {
@@ -123,8 +149,53 @@ export default function Home() {
             reports={filteredReports}
             prefectureStats={prefectureStats}
             layerMode={layerMode}
+            searchTarget={searchTarget}
           />
         )}
+
+        {/* 地図上の検索バーオーバーレイ */}
+        <div style={{
+          position: 'absolute', top: 16, left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000, width: '100%', maxWidth: 420, padding: '0 16px',
+        }}>
+          <form onSubmit={handleMapSearch} style={{ display: 'flex', gap: 6 }}>
+            <input
+              style={{
+                flex: 1, minWidth: 0,
+                background: 'rgba(15,25,35,0.92)',
+                border: '1px solid #1e3a5f',
+                borderRadius: 8, padding: '9px 14px',
+                color: '#e2e8f0', fontSize: 13, outline: 'none',
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+              }}
+              placeholder="🔍 住所・地名で検索（例: 新宿区、大阪城）"
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setSearchError('') }}
+            />
+            <button type="submit" disabled={searching} style={{
+              padding: '9px 16px',
+              background: searching ? '#1e3a5f' : '#4FC3F7',
+              color: '#0a0f1a',
+              border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700,
+              cursor: searching ? 'not-allowed' : 'pointer',
+              flexShrink: 0,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}>
+              {searching ? '…' : '検索'}
+            </button>
+          </form>
+          {searchError && (
+            <div style={{
+              marginTop: 6, padding: '6px 12px',
+              background: 'rgba(239,68,68,0.15)', border: '1px solid #EF444466',
+              borderRadius: 6, color: '#f87171', fontSize: 12,
+            }}>
+              {searchError}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 右上：認証 + 投稿ボタン */}
