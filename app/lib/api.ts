@@ -39,13 +39,16 @@ export async function fetchReports(params?: {
   max_lng?: number
 }): Promise<Report[]> {
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15000) // 15秒タイムアウト
     const query = new URLSearchParams()
     if (params?.site_type_id) query.set('site_type_id', String(params.site_type_id))
     if (params?.min_lat) query.set('min_lat', String(params.min_lat))
     if (params?.max_lat) query.set('max_lat', String(params.max_lat))
     if (params?.min_lng) query.set('min_lng', String(params.min_lng))
     if (params?.max_lng) query.set('max_lng', String(params.max_lng))
-    const res = await fetch(`${API_BASE}/api/reports?${query}`)
+    const res = await fetch(`${API_BASE}/api/reports?${query}`, { signal: controller.signal })
+    clearTimeout(timer)
     if (!res.ok) return []
     return res.json()
   } catch {

@@ -16,7 +16,7 @@ const Map = dynamic(() => import('./components/Map'), { ssr: false })
 export default function Home() {
   // ───── 投稿ピン state ─────
   const [allReports, setAllReports] = useState<Report[]>([])
-  const [loading, setLoading]       = useState(true)
+  const [loading, setLoading]       = useState(false)
   const [filter, setFilter] = useState({
     incident_type: '全て',
     nationality_type: '全て',
