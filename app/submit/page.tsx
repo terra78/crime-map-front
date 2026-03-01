@@ -259,27 +259,28 @@ export default function SubmitPage() {
               <input style={S.input} placeholder="例: 東京都新宿区" value={form.address} onChange={e => set('address', e.target.value)} />
             </div>
           </div>
-          <label style={S.label}>
-            発生場所を地図上でクリックして選択
-            {latlng && <span style={{ color: '#4FC3F7', marginLeft: 8 }}>✓ {latlng.lat.toFixed(4)}, {latlng.lng.toFixed(4)}</span>}
-          </label>
           {/* 住所検索バー */}
-          <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <label style={{ ...S.label, marginBottom: 6 }}>📍 住所で地図を移動（任意）</label>
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
             <input
-              style={{ ...S.input, flex: 1, margin: 0 }}
-              placeholder="住所で検索（例: 東京都新宿区）"
+              style={{ ...S.input, flex: 1, minWidth: 0 }}
+              placeholder="例: 東京都新宿区、大阪城、渋谷駅..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
             <button type="submit" disabled={searching} style={{
-              padding: '8px 14px', background: '#334155', color: '#e2e8f0',
-              border: '1px solid #1e2d40', borderRadius: 6, fontSize: 12,
-              cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              padding: '8px 16px', background: '#1e3a5f', color: '#4FC3F7',
+              border: '1px solid #4FC3F744', borderRadius: 6, fontSize: 13,
+              cursor: searching ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 600,
             }}>
-              {searching ? '…' : '🔍 検索'}
+              {searching ? '検索中…' : '🔍 検索'}
             </button>
           </form>
-          {searchError && <p style={{ color: '#f87171', fontSize: 11, margin: '0 0 6px' }}>{searchError}</p>}
+          {searchError && <p style={{ color: '#f87171', fontSize: 11, margin: '-8px 0 8px' }}>{searchError}</p>}
+          <label style={S.label}>
+            発生場所を地図上でクリックして選択
+            {latlng && <span style={{ color: '#4FC3F7', marginLeft: 8 }}>✓ {latlng.lat.toFixed(4)}, {latlng.lng.toFixed(4)}</span>}
+          </label>
           <div ref={mapRef} style={{ width: '100%', height: 280, borderRadius: 8, border: `1px solid ${latlng ? '#4FC3F7' : '#1e2d40'}`, overflow: 'hidden' }} />
         </div>
 

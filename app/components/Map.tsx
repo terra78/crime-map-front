@@ -39,10 +39,10 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       zoomControl: false,
     })
 
-    // 日本語ラベル対応タイル（CartoDB Voyager）
+    // 日本語ラベル対応タイル（国土地理院）
     L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>', maxZoom: 19 }
+      'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
+      { attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>', maxZoom: 18 }
     ).addTo(map)
 
     // カスタムズームコントロール（右下）
