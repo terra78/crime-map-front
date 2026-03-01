@@ -164,6 +164,7 @@ function EditModal({
         title:       form.title,
         address:     form.address,
         occurred_at: form.occurred_at,
+        status:      'pending',
         lat:         latlng?.lat ?? report.lat,
         lng:         latlng?.lng ?? report.lng,
         data: {
