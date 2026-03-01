@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { fetchMyReports, updateMyReport, deleteMyReport, Report } from '../lib/api'
+import DatePicker from '../components/DatePicker'
 
 const INCIDENT_COLORS: Record<string, string> = {
   '交通事故':           '#F59E0B',
@@ -40,6 +41,7 @@ const S = {
 
 type FieldGroup  = { label: string; options: string[] }
 type SiteTypeApi = { fields: { key: string; options?: string[]; groups?: FieldGroup[] }[] }
+type LatLng      = { lat: number; lng: number }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -64,13 +66,23 @@ function EditModal({
     occurred_at:      report.occurred_at ?? '',
     source_url:       report.data?.source_url ?? '',
   })
-  const [saving, setSaving]               = useState(false)
-  const [err, setErr]                     = useState('')
-  const [incidentOptions, setIncidentOptions]       = useState<string[]>(INCIDENT_OPTIONS)
-  const [nationalityGroups, setNationalityGroups]   = useState<FieldGroup[]>([])
-  const [nationalityOptions, setNationalityOptions] = useState<string[]>([])
+  const [saving, setSaving]                           = useState(false)
+  const [err, setErr]                                 = useState('')
+  const [incidentOptions, setIncidentOptions]         = useState<string[]>(INCIDENT_OPTIONS)
+  const [nationalityGroups, setNationalityGroups]     = useState<FieldGroup[]>([])
+  const [nationalityOptions, setNationalityOptions]   = useState<string[]>([])
+  const [latlng, setLatlng] = useState<LatLng | null>(
+    report.lat && report.lng ? { lat: report.lat, lng: report.lng } : null
+  )
 
-  // site_typeからフィールド選択肢を取得
+  // 地図用 ref
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapObjRef       = useRef<any>(null)
+  const markerRef       = useRef<any>(null)
+
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // site_type から選択肢を取得
   useEffect(() => {
     fetch(`${API_BASE}/api/site_types/crime`)
       .then(r => r.json())
@@ -79,16 +91,55 @@ function EditModal({
         if (incField?.options?.length) setIncidentOptions(incField.options)
 
         const natField = data.fields?.find(f => f.key === 'nationality_type')
-        if (natField?.groups?.length) {
-          setNationalityGroups(natField.groups)
-        } else if (natField?.options?.length) {
-          setNationalityOptions(natField.options)
-        }
+        if (natField?.groups?.length)        setNationalityGroups(natField.groups)
+        else if (natField?.options?.length)  setNationalityOptions(natField.options)
       })
-      .catch(() => {}) // 失敗時はデフォルト値を使用
+      .catch(() => {})
   }, [])
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  // Leaflet 地図の初期化（モーダルマウント後）
+  useEffect(() => {
+    if (typeof window === 'undefined' || mapObjRef.current || !mapContainerRef.current) return
+    const L = require('leaflet')
+
+    const initLat = report.lat ?? 36.5
+    const initLng = report.lng ?? 137.0
+    const initZoom = (report.lat && report.lng) ? 13 : 5
+
+    const map = L.map(mapContainerRef.current, { center: [initLat, initLng], zoom: initZoom })
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO', maxZoom: 19,
+    }).addTo(map)
+
+    // 既存位置にマーカーを表示
+    if (report.lat && report.lng) {
+      markerRef.current = L.marker([report.lat, report.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:24px;height:24px;background:#FF7043;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12],
+        })
+      }).addTo(map)
+    }
+
+    map.on('click', (e: any) => {
+      const { lat, lng } = e.latlng
+      setLatlng({ lat, lng })
+      if (markerRef.current) markerRef.current.remove()
+      markerRef.current = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:24px;height:24px;background:#FF7043;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12],
+        })
+      }).addTo(map)
+    })
+
+    mapObjRef.current = map
+    setTimeout(() => map.invalidateSize(), 100)
+
+    return () => { map.remove(); mapObjRef.current = null }
+  }, [])
 
   const handleSave = async () => {
     if (!form.title.trim()) { setErr('タイトルを入力してください'); return }
@@ -99,6 +150,8 @@ function EditModal({
       address:     form.address,
       occurred_at: form.occurred_at || null,
       source_url:  form.source_url || null,
+      lat:         latlng?.lat,
+      lng:         latlng?.lng,
       data: {
         incident_type:    form.incident_type,
         nationality_type: form.nationality_type,
@@ -111,7 +164,8 @@ function EditModal({
         title:       form.title,
         address:     form.address,
         occurred_at: form.occurred_at,
-        status:      'pending',
+        lat:         latlng?.lat ?? report.lat,
+        lng:         latlng?.lng ?? report.lng,
         data: {
           incident_type:    form.incident_type,
           nationality_type: form.nationality_type,
@@ -126,13 +180,13 @@ function EditModal({
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, padding: 16,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      zIndex: 9999, padding: '24px 16px', overflowY: 'auto',
     }}>
       <div style={{
         background: '#0f1923', border: '1px solid #1e2d40',
         borderRadius: 12, padding: 24, width: '100%', maxWidth: 520,
-        maxHeight: '90vh', overflowY: 'auto',
+        marginTop: 'auto', marginBottom: 'auto',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 16, color: '#e2e8f0' }}>投稿を編集</h2>
@@ -140,10 +194,13 @@ function EditModal({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* タイトル */}
           <div>
             <label style={S.label}>タイトル <span style={{ color: '#FF7043' }}>*</span></label>
             <input style={S.input} value={form.title} onChange={e => set('title', e.target.value)} />
           </div>
+
+          {/* 詳細説明 */}
           <div>
             <label style={S.label}>詳細説明</label>
             <textarea
@@ -152,6 +209,8 @@ function EditModal({
               onChange={e => set('description', e.target.value)}
             />
           </div>
+
+          {/* 種別・国籍 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={S.label}>種別</label>
@@ -173,16 +232,40 @@ function EditModal({
               </select>
             </div>
           </div>
+
+          {/* 発生日・住所 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={S.label}>発生日</label>
-              <input type="date" style={S.input} value={form.occurred_at} onChange={e => set('occurred_at', e.target.value)} />
+              <DatePicker value={form.occurred_at} onChange={v => set('occurred_at', v)} />
             </div>
             <div>
               <label style={S.label}>住所</label>
               <input style={S.input} value={form.address} onChange={e => set('address', e.target.value)} />
             </div>
           </div>
+
+          {/* 発生場所（地図） */}
+          <div>
+            <label style={S.label}>
+              発生場所（地図をクリックして更新）
+              {latlng && (
+                <span style={{ color: '#4FC3F7', marginLeft: 8 }}>
+                  ✓ {latlng.lat.toFixed(4)}, {latlng.lng.toFixed(4)}
+                </span>
+              )}
+            </label>
+            <div
+              ref={mapContainerRef}
+              style={{
+                width: '100%', height: 220, borderRadius: 8,
+                border: `1px solid ${latlng ? '#4FC3F7' : '#1e2d40'}`,
+                overflow: 'hidden',
+              }}
+            />
+          </div>
+
+          {/* ソースURL */}
           <div>
             <label style={S.label}>ソースURL</label>
             <input style={S.input} placeholder="https://..." value={form.source_url} onChange={e => set('source_url', e.target.value)} />
@@ -205,10 +288,6 @@ function EditModal({
             {saving ? '保存中...' : '保存する'}
           </button>
         </div>
-
-        <p style={{ fontSize: 11, color: '#475569', margin: '12px 0 0' }}>
-          ※ 編集後はステータスが「審査待ち」に戻ります
-        </p>
       </div>
     </div>
   )
@@ -218,12 +297,12 @@ function EditModal({
 export default function MyReportsPage() {
   const router = useRouter()
   const { getToken, isLoaded } = useAuth()
-  const [reports, setReports]     = useState<Report[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState('')
-  const [token, setToken]         = useState<string | null>(null)
+  const [reports, setReports]       = useState<Report[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
+  const [token, setToken]           = useState<string | null>(null)
   const [editTarget, setEditTarget] = useState<Report | null>(null)
-  const [deleting, setDeleting]   = useState<number | null>(null)
+  const [deleting, setDeleting]     = useState<number | null>(null)
 
   useEffect(() => {
     if (!isLoaded) return
@@ -302,7 +381,6 @@ export default function MyReportsPage() {
                 const status = STATUS_CONFIG[r.status || 'pending']
                 return (
                   <div key={r.id} style={{ background: '#111827', border: '1px solid #1e2d40', borderRadius: 10, padding: '14px 16px' }}>
-                    {/* 上段：種別・ステータス・ID */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, background: `${color}22`, color, border: `1px solid ${color}66` }}>
                         {incidentType}
@@ -313,12 +391,10 @@ export default function MyReportsPage() {
                       <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>#{r.id}</span>
                     </div>
 
-                    {/* タイトル */}
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
                       {r.title || '（タイトルなし）'}
                     </div>
 
-                    {/* メタ情報 */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 11, color: '#64748b' }}>
                       {r.occurred_at && <span>📅 {r.occurred_at}</span>}
                       {r.address     && <span>📍 {r.address}</span>}
@@ -326,7 +402,6 @@ export default function MyReportsPage() {
                       {r.created_at  && <span>🕒 投稿 {new Date(r.created_at).toLocaleDateString('ja-JP')}</span>}
                     </div>
 
-                    {/* ソースURL */}
                     {r.data?.source_url && (
                       <a href={r.data.source_url} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: '#60a5fa', textDecoration: 'none' }}>
@@ -334,26 +409,17 @@ export default function MyReportsPage() {
                       </a>
                     )}
 
-                    {/* 編集・削除ボタン */}
                     <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: '1px solid #1e2d4066', paddingTop: 12 }}>
                       <button
                         onClick={() => setEditTarget(r)}
-                        style={{
-                          padding: '6px 14px', background: 'transparent',
-                          color: '#60a5fa', border: '1px solid #60a5fa44',
-                          borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                        }}
+                        style={{ padding: '6px 14px', background: 'transparent', color: '#60a5fa', border: '1px solid #60a5fa44', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
                       >
                         ✏️ 編集
                       </button>
                       <button
                         onClick={() => handleDelete(r.id)}
                         disabled={deleting === r.id}
-                        style={{
-                          padding: '6px 14px', background: 'transparent',
-                          color: '#f87171', border: '1px solid #f8717144',
-                          borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                        }}
+                        style={{ padding: '6px 14px', background: 'transparent', color: '#f87171', border: '1px solid #f8717144', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
                       >
                         {deleting === r.id ? '削除中...' : '🗑️ 削除'}
                       </button>

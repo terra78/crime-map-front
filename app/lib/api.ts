@@ -71,6 +71,8 @@ export type ReportUpdatePayload = {
   occurred_at?: string | null
   source_url?: string | null
   data?: Record<string, string>
+  lat?: number
+  lng?: number
 }
 
 export async function updateMyReport(
