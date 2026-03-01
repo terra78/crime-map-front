@@ -48,6 +48,9 @@ export default function SubmitPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState('')
   const [success,    setSuccess]    = useState(false)
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [searching,    setSearching]    = useState(false)
+  const [searchError,  setSearchError]  = useState('')
 
   // DBからsite_type取得
   useEffect(() => {
@@ -70,8 +73,8 @@ export default function SubmitPage() {
     const L = require('leaflet')
 
     const map = L.map(mapRef.current!, { center: [36.5, 137.0], zoom: 5 })
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', maxZoom: 19,
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>', maxZoom: 18,
     }).addTo(map)
 
     map.on('click', (e: any) => {
@@ -91,6 +94,34 @@ export default function SubmitPage() {
   }, [loading])
 
   const set = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }))
+
+  // 住所検索（Nominatim）
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!searchQuery.trim() || !mapObjRef.current) return
+    setSearching(true); setSearchError('')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&accept-language=ja&limit=1`,
+        { headers: { 'User-Agent': 'CrimeMapJapan/1.0' } }
+      )
+      const data = await res.json()
+      if (!data.length) { setSearchError('場所が見つかりませんでした'); return }
+      const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon)
+      const L = require('leaflet')
+      mapObjRef.current.setView([lat, lng], 14)
+      setLatlng({ lat, lng })
+      if (markerRef.current) markerRef.current.remove()
+      markerRef.current = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:24px;height:24px;background:#FF7043;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12],
+        })
+      }).addTo(mapObjRef.current)
+    } catch { setSearchError('検索に失敗しました') }
+    finally { setSearching(false) }
+  }
 
   const handleSubmit = async () => {
     if (!latlng)     { setError('地図上で発生場所をクリックしてください'); return }
@@ -232,6 +263,23 @@ export default function SubmitPage() {
             発生場所を地図上でクリックして選択
             {latlng && <span style={{ color: '#4FC3F7', marginLeft: 8 }}>✓ {latlng.lat.toFixed(4)}, {latlng.lng.toFixed(4)}</span>}
           </label>
+          {/* 住所検索バー */}
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <input
+              style={{ ...S.input, flex: 1, margin: 0 }}
+              placeholder="住所で検索（例: 東京都新宿区）"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            <button type="submit" disabled={searching} style={{
+              padding: '8px 14px', background: '#334155', color: '#e2e8f0',
+              border: '1px solid #1e2d40', borderRadius: 6, fontSize: 12,
+              cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {searching ? '…' : '🔍 検索'}
+            </button>
+          </form>
+          {searchError && <p style={{ color: '#f87171', fontSize: 11, margin: '0 0 6px' }}>{searchError}</p>}
           <div ref={mapRef} style={{ width: '100%', height: 280, borderRadius: 8, border: `1px solid ${latlng ? '#4FC3F7' : '#1e2d40'}`, overflow: 'hidden' }} />
         </div>
 

@@ -74,6 +74,9 @@ function EditModal({
   const [latlng, setLatlng] = useState<LatLng | null>(
     report.lat && report.lng ? { lat: report.lat, lng: report.lng } : null
   )
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [searching,    setSearching]    = useState(false)
+  const [searchError,  setSearchError]  = useState('')
 
   // 地図用 ref
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -81,6 +84,34 @@ function EditModal({
   const markerRef       = useRef<any>(null)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // 住所検索（Nominatim）
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!searchQuery.trim() || !mapObjRef.current) return
+    setSearching(true); setSearchError('')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&accept-language=ja&limit=1`,
+        { headers: { 'User-Agent': 'CrimeMapJapan/1.0' } }
+      )
+      const data = await res.json()
+      if (!data.length) { setSearchError('場所が見つかりませんでした'); return }
+      const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon)
+      const L = require('leaflet')
+      mapObjRef.current.setView([lat, lng], 14)
+      setLatlng({ lat, lng })
+      if (markerRef.current) markerRef.current.remove()
+      markerRef.current = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:24px;height:24px;background:#FF7043;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12],
+        })
+      }).addTo(mapObjRef.current)
+    } catch { setSearchError('検索に失敗しました') }
+    finally { setSearching(false) }
+  }
 
   // site_type から選択肢を取得
   useEffect(() => {
@@ -107,8 +138,8 @@ function EditModal({
     const initZoom = (report.lat && report.lng) ? 13 : 5
 
     const map = L.map(mapContainerRef.current, { center: [initLat, initLng], zoom: initZoom })
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', maxZoom: 19,
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>', maxZoom: 18,
     }).addTo(map)
 
     // 既存位置にマーカーを表示
@@ -256,6 +287,23 @@ function EditModal({
                 </span>
               )}
             </label>
+            {/* 住所検索バー */}
+            <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <input
+                style={{ ...S.input, flex: 1 }}
+                placeholder="住所で検索（例: 東京都新宿区）"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <button type="submit" disabled={searching} style={{
+                padding: '8px 14px', background: '#334155', color: '#e2e8f0',
+                border: '1px solid #1e2d40', borderRadius: 6, fontSize: 12,
+                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                {searching ? '…' : '🔍 検索'}
+              </button>
+            </form>
+            {searchError && <p style={{ color: '#f87171', fontSize: 11, margin: '0 0 6px' }}>{searchError}</p>}
             <div
               ref={mapContainerRef}
               style={{

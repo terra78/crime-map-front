@@ -39,10 +39,10 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       zoomControl: false,
     })
 
-    // ダークテーマタイル
+    // 日本語ラベル対応タイル（CartoDB Voyager）
     L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      { attribution: '© OpenStreetMap © CARTO', maxZoom: 19 }
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>', maxZoom: 19 }
     ).addTo(map)
 
     // カスタムズームコントロール（右下）
