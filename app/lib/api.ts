@@ -38,15 +38,19 @@ export async function fetchReports(params?: {
   min_lng?: number
   max_lng?: number
 }): Promise<Report[]> {
-  const query = new URLSearchParams()
-  if (params?.site_type_id) query.set('site_type_id', String(params.site_type_id))
-  if (params?.min_lat) query.set('min_lat', String(params.min_lat))
-  if (params?.max_lat) query.set('max_lat', String(params.max_lat))
-  if (params?.min_lng) query.set('min_lng', String(params.min_lng))
-  if (params?.max_lng) query.set('max_lng', String(params.max_lng))
-  const res = await fetch(`${API_BASE}/api/reports?${query}`)
-  if (!res.ok) return []
-  return res.json()
+  try {
+    const query = new URLSearchParams()
+    if (params?.site_type_id) query.set('site_type_id', String(params.site_type_id))
+    if (params?.min_lat) query.set('min_lat', String(params.min_lat))
+    if (params?.max_lat) query.set('max_lat', String(params.max_lat))
+    if (params?.min_lng) query.set('min_lng', String(params.min_lng))
+    if (params?.max_lng) query.set('max_lng', String(params.max_lng))
+    const res = await fetch(`${API_BASE}/api/reports?${query}`)
+    if (!res.ok) return []
+    return res.json()
+  } catch {
+    return []
+  }
 }
 
 export async function fetchMyReports(token: string): Promise<Report[]> {

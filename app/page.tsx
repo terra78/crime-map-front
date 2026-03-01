@@ -38,7 +38,7 @@ export default function Home() {
     fetchReports({ site_type_id: 1 }).then(data => {
       setAllReports(data)
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [])
 
   // ───── 都道府県統計メタ（年・罪種一覧）を初回取得 ─────
