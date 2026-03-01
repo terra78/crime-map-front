@@ -13,6 +13,8 @@ export type Report = {
     source_url?: string
   }
   site_type_id: number
+  status?: 'pending' | 'ai_approved' | 'human_approved' | 'rejected'
+  created_at?: string
 }
 
 export type PrefectureStat = {
@@ -43,6 +45,14 @@ export async function fetchReports(params?: {
   if (params?.min_lng) query.set('min_lng', String(params.min_lng))
   if (params?.max_lng) query.set('max_lng', String(params.max_lng))
   const res = await fetch(`${API_BASE}/api/reports?${query}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function fetchMyReports(token: string): Promise<Report[]> {
+  const res = await fetch(`${API_BASE}/api/reports/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
   if (!res.ok) return []
   return res.json()
 }

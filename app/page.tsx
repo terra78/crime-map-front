@@ -139,6 +139,17 @@ export default function Home() {
           </SignInButton>
         </SignedOut>
         <SignedIn>
+          <a href="/my-reports" style={{
+            padding: '7px 12px',
+            background: 'transparent',
+            color: '#94a3b8',
+            border: '1px solid #1e2d40',
+            borderRadius: 6, fontSize: 13,
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}>
+            マイ投稿
+          </a>
           <UserButton
             appearance={{
               elements: {
