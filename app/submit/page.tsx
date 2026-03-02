@@ -38,11 +38,11 @@ export default function SubmitPage() {
   const markerRef = useRef<any>(null)
 
   const [siteType, setSiteType] = useState<SiteType | null>(null)
-  const [loading,  setLoading]  = useState(true)
+  const [loading,  setLoading]  = useState(false)  // フォームはすぐ表示
   const [form, setForm] = useState({
     title:            '',
     description:      '',
-    incident_type:    '',
+    incident_type:    FALLBACK_INCIDENT_GROUPS[0]?.options?.[0] ?? '',  // 即時フォールバック
     nationality_type: '日本',
     source_url:       '',
     occurred_at:      '',
@@ -56,33 +56,27 @@ export default function SubmitPage() {
   const [searching,    setSearching]    = useState(false)
   const [searchError,  setSearchError]  = useState('')
 
-  // DBからsite_type取得
+  // DBからsite_type取得（バックグラウンド・フォームはブロックしない）
   useEffect(() => {
-    fetch(`${API_BASE}/api/site_types/crime`)
+    const controller = new AbortController()
+    fetch(`${API_BASE}/api/site_types/crime`, { signal: controller.signal })
       .then(r => r.json())
       .then((data: SiteType) => {
         setSiteType(data)
-        // 初期選択: groups の最初のオプション、なければフォールバックの最初
+        // DBに groups が定義されていれば incident_type の初期値を更新
         const incidentField = data.fields?.find(f => f.key === 'incident_type')
         const firstOption =
           incidentField?.groups?.[0]?.options?.[0] ||
-          incidentField?.options?.[0] ||
-          FALLBACK_INCIDENT_GROUPS[0]?.options?.[0] ||
-          ''
+          incidentField?.options?.[0]
         if (firstOption) setForm(f => ({ ...f, incident_type: firstOption }))
-        setLoading(false)
       })
-      .catch(() => {
-        // DB取得失敗時もフォールバックで動作
-        const firstOption = FALLBACK_INCIDENT_GROUPS[0]?.options?.[0] || ''
-        if (firstOption) setForm(f => ({ ...f, incident_type: firstOption }))
-        setLoading(false)
-      })
+      .catch(() => {})  // エラーはフォールバックで吸収済み
+    return () => controller.abort()
   }, [])
 
-  // 地図初期化（ローディング完了後）
+  // 地図初期化（マウント後すぐ）
   useEffect(() => {
-    if (typeof window === 'undefined' || mapObjRef.current || loading) return
+    if (typeof window === 'undefined' || mapObjRef.current) return
     const L = require('leaflet')
 
     const map = L.map(mapRef.current!, { center: [36.5, 137.0], zoom: 5 })
@@ -104,7 +98,7 @@ export default function SubmitPage() {
     })
 
     mapObjRef.current = map
-  }, [loading])
+  }, [])
 
   const set = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }))
 
@@ -206,12 +200,6 @@ export default function SubmitPage() {
           地図に戻る
         </button>
       </div>
-    </div>
-  )
-
-  if (loading) return (
-    <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#64748b' }}>読み込み中...</div>
     </div>
   )
 

@@ -9,6 +9,8 @@ export type Report = {
   occurred_at: string | null
   data: {
     incident_type?: string
+    crime_category?: string
+    crime_law?: string
     nationality_type?: string
     source_url?: string
   }
