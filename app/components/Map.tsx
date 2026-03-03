@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Report, PrefectureStat } from '../lib/api'
 
 const INCIDENT_COLORS: Record<string, string> = {
@@ -22,43 +22,123 @@ type Props = {
   }) => void
 }
 
-// occurred_at を "YYYY年M月D日" 形式にフォーマット
-function formatDate(s: string | null): string | null {
+export function formatDate(s: string | null): string | null {
   if (!s) return null
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (!m) return s
   return `${m[1]}年${parseInt(m[2])}月${parseInt(m[3])}日`
 }
 
-export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, onBoundsChange }: Props) {
-  const mapRef        = useRef<HTMLDivElement>(null)
-  const mapObjRef     = useRef<any>(null)
-  const markersRef    = useRef<any[]>([])
-  const bubblesRef    = useRef<any[]>([])
-  const tempMarkersRef = useRef<any[]>([])   // 他○件ポップアップ用一時マーカー
+function sortByDate(reports: Report[]): Report[] {
+  return [...reports].sort((a, b) => {
+    const da = a.occurred_at || ''
+    const db = b.occurred_at || ''
+    return db.localeCompare(da)
+  })
+}
 
+// ── 同一地点グループパネル（2〜20件） ───────────────────────────────────────
+function GroupPanel({ reports, onClose }: { reports: Report[]; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'absolute', top: 8, left: 8, zIndex: 500,
+      background: '#0a0f1a', border: '1px solid #1e2d40',
+      borderRadius: 10, padding: 12,
+      maxWidth: 560, maxHeight: 'calc(100% - 80px)',
+      overflowY: 'auto',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.7)',
+      fontFamily: "'Noto Sans JP', sans-serif",
+    }}>
+      {/* ヘッダー */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+          同一地点の事件&nbsp;<span style={{ color: '#FF7043' }}>{reports.length}件</span>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none', border: '1px solid #1e2d40', borderRadius: 4,
+            color: '#64748b', fontSize: 13, cursor: 'pointer',
+            padding: '2px 8px', lineHeight: 1.4,
+          }}
+        >✕</button>
+      </div>
+
+      {/* カードグリッド */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {reports.map(r => {
+          const color   = INCIDENT_COLORS[r.data?.incident_type || ''] || '#6B7280'
+          const nation  = r.data?.nationality_type || '不明'
+          const dateLbl = formatDate(r.occurred_at)
+          return (
+            <div key={r.id} style={{
+              width: 250, background: '#111827',
+              border: '1px solid #1e2d40', borderRadius: 6,
+              padding: '10px 12px', boxSizing: 'border-box',
+            }}>
+              <div style={{
+                display: 'inline-block', padding: '2px 7px',
+                background: `${color}33`, color,
+                border: `1px solid ${color}66`,
+                borderRadius: 4, fontSize: 10, marginBottom: 6,
+              }}>{r.data?.incident_type || 'その他'}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 3, lineHeight: 1.4, color: '#e2e8f0' }}>
+                {r.title || '（タイトルなし）'}
+              </div>
+              {r.address && (
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>📍 {r.address}</div>
+              )}
+              {dateLbl && (
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>📅 {dateLbl}</div>
+              )}
+              <div style={{ fontSize: 10 }}>
+                <span style={{
+                  padding: '1px 5px',
+                  background: nation === '外国人' ? '#FF704333' : '#4FC3F733',
+                  color:      nation === '外国人' ? '#FF7043'   : '#4FC3F7',
+                  borderRadius: 4,
+                }}>{nation}</span>
+              </div>
+              {r.source_url && (
+                <a href={r.source_url} target="_blank" rel="noopener noreferrer" style={{
+                  display: 'inline-block', marginTop: 6, fontSize: 10,
+                  color: '#60a5fa', textDecoration: 'none',
+                }}>🔗 ソースを確認</a>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, onBoundsChange }: Props) {
+  const mapRef     = useRef<HTMLDivElement>(null)
+  const mapObjRef  = useRef<any>(null)
+  const markersRef = useRef<any[]>([])
+  const bubblesRef = useRef<any[]>([])
+  const [groupPanel, setGroupPanel] = useState<Report[] | null>(null)
+
+  // ── 地図初期化 ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined' || mapObjRef.current) return
 
     const L = require('leaflet')
 
-    // 日本全体が見えるズームレベル
     const map = L.map(mapRef.current!, {
       center: [36.5, 137.0],
       zoom: 5,
       zoomControl: false,
     })
 
-    // 日本語ラベル対応タイル（国土地理院）
     L.tileLayer(
       'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
       { attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>', maxZoom: 18 }
     ).addTo(map)
 
-    // カスタムズームコントロール（右下）
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
-    // 境界変更時にコールバック
     map.on('moveend', () => {
       const b = map.getBounds()
       onBoundsChange?.({
@@ -67,30 +147,31 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       })
     })
 
+    // 地図クリックでグループパネルを閉じる
+    map.on('click', () => setGroupPanel(null))
+
     mapObjRef.current = map
     return () => { map.remove(); mapObjRef.current = null }
   }, [])
 
-  // 外部からの地図移動（検索）
+  // ── 地図移動（検索） ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapObjRef.current || !searchTarget) return
     mapObjRef.current.setView([searchTarget.lat, searchTarget.lng], searchTarget.zoom ?? 13)
   }, [searchTarget])
 
-  // ピンマーカー更新
+  // ── ピンマーカー更新 ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapObjRef.current) return
-    const L   = require('leaflet')
-    const map = mapObjRef.current
+    const L = require('leaflet')
 
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
-    tempMarkersRef.current.forEach(m => m.remove())
-    tempMarkersRef.current = []
+    setGroupPanel(null)
 
     if (layerMode !== 'pins') return
 
-    // ── 同一座標グループ化（小数点4桁 ≈ 約11m 精度でキー） ──────────────────
+    // 同一座標グループ化（小数点4桁 ≈ 約11m精度）
     // ※ コンポーネント名が "Map" のため globalThis.Map で組み込みクラスを参照
     const grouped = new globalThis.Map<string, Report[]>()
     reports.forEach(r => {
@@ -99,80 +180,19 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       grouped.get(key)!.push(r)
     })
 
-    // ── 他○件ポップアップを円形配置で表示 ────────────────────────────────────
-    const showOthers = (primary: Report, others: Report[]) => {
-      // 既存の他件マーカーをすべて削除（トグル的な動作）
-      if (tempMarkersRef.current.length > 0) {
-        tempMarkersRef.current.forEach(m => m.remove())
-        tempMarkersRef.current = []
-        return
-      }
-
-      const centerPt = map.latLngToContainerPoint([primary.lat, primary.lng])
-      const radius   = 220  // ピクセル半径
-
-      others.forEach((r, i) => {
-        // 上から時計回りに均等配置
-        const angle   = (i / others.length) * 2 * Math.PI - Math.PI / 2
-        const px      = centerPt.x + radius * Math.cos(angle)
-        const py      = centerPt.y + radius * Math.sin(angle)
-        const latlng  = map.containerPointToLatLng(L.point(px, py))
-
-        const color   = INCIDENT_COLORS[r.data?.incident_type || ''] || '#6B7280'
-        const nation  = r.data?.nationality_type || '不明'
-        const dateLbl = formatDate(r.occurred_at)
-        const linkId2 = `other-link-${r.id}`
-
-        const tooltipHtml = `
-          <div>
-            <div style="display:inline-block;padding:2px 6px;background:${color}33;color:${color};border:1px solid ${color}66;border-radius:4px;font-size:10px;margin-bottom:6px;">
-              ${r.data?.incident_type || 'その他'}
-            </div>
-            <div style="font-size:12px;font-weight:600;margin-bottom:3px;line-height:1.4;">
-              ${r.title || '（タイトルなし）'}
-            </div>
-            ${r.address ? `<div style="font-size:10px;color:#64748b;margin-bottom:2px;">📍 ${r.address}</div>` : ''}
-            ${dateLbl   ? `<div style="font-size:10px;color:#64748b;margin-bottom:4px;">📅 ${dateLbl}</div>` : ''}
-            <div style="font-size:10px;">
-              <span style="padding:1px 5px;background:${nation === '外国人' ? '#FF704333' : '#4FC3F733'};color:${nation === '外国人' ? '#FF7043' : '#4FC3F7'};border-radius:4px;">
-                ${nation}
-              </span>
-            </div>
-            ${r.source_url ? `<a id="${linkId2}" href="${r.source_url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:10px;color:#60a5fa;text-decoration:none;">🔗 ソースを確認</a>` : ''}
-          </div>
-        `
-
-        // 小さなドットマーカーを配置してツールチップをアンカーにする
-        const tempMarker = L.circleMarker(latlng, {
-          radius:      5,
-          color:       color,
-          fillColor:   color,
-          fillOpacity: 0.9,
-          weight:      2,
-          opacity:     0.9,
-        })
-
-        tempMarker.bindTooltip(tooltipHtml, {
-          permanent:   true,
-          interactive: true,
-          className:   'crime-popup-other',
-          direction:   'top',
-          offset:      [0, -6],
-        })
-
-        tempMarker.addTo(map)
-        tempMarker.openTooltip()
-        tempMarkersRef.current.push(tempMarker)
-      })
-    }
-
-    // ── グループごとにマーカーを生成 ─────────────────────────────────────────
     grouped.forEach(group => {
-      const primary = group[0]
-      const others  = group.slice(1, 21)   // 最大20件
+      // 発生日時の降順でソート
+      const sorted  = sortByDate(group)
+      const primary = sorted[0]
+      const count   = sorted.length
 
       const color  = INCIDENT_COLORS[primary.data?.incident_type || ''] || '#6B7280'
       const nation = primary.data?.nationality_type || '不明'
+
+      // ピン内テキスト：2件以上は件数、1件は国籍略称
+      const innerText     = count >= 2 ? String(count) : (nation === '外国人' ? '外' : nation === '日本人' ? '日' : '?')
+      const innerFontSize = count >= 10 ? '9px' : '11px'
+      const innerWeight   = count >= 2 ? '700' : '400'
 
       const icon = L.divIcon({
         className: '',
@@ -189,84 +209,78 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             <div style="
               transform: rotate(45deg);
               text-align: center;
-              font-size: 11px;
+              font-size: ${innerFontSize};
               line-height: 24px;
-            ">${nation === '外国人' ? '外' : nation === '日本人' ? '日' : '?'}</div>
+              font-weight: ${innerWeight};
+            ">${innerText}</div>
           </div>`,
         iconSize:   [28, 28],
         iconAnchor: [14, 28],
       })
 
-      const dateLabel  = formatDate(primary.occurred_at)
-      const linkId     = `src-link-${primary.id}`
+      // ──────────────────────────────────────────────────────────────────────
+      // 1件: 通常のポップアップ
+      // ──────────────────────────────────────────────────────────────────────
+      if (count === 1) {
+        const dateLabel  = formatDate(primary.occurred_at)
+        const linkId     = `src-link-${primary.id}`
+        const sourceHtml = primary.source_url ? `
+          <a id="${linkId}" href="${primary.source_url}" target="_blank" rel="noopener" style="
+            display: inline-block; margin-top: 8px; font-size: 11px;
+            color: #60a5fa; text-decoration: none;
+          ">🔗 ソースを確認</a>` : ''
 
-      const sourceHtml = primary.source_url ? `
-        <a id="${linkId}" href="${primary.source_url}" target="_blank" rel="noopener" style="
-          display: inline-block; margin-top: 8px; font-size: 11px;
-          color: #60a5fa; text-decoration: none;
-        ">🔗 ソースを確認</a>` : ''
-
-      const othersHtml = others.length > 0 ? `
-        <div style="
-          text-align: right; margin-top: 8px;
-          border-top: 1px solid #1e2d40; padding-top: 6px;
-        ">
-          <a id="others-btn-${primary.id}" href="#" style="
-            font-size: 11px; color: #94a3b8; text-decoration: none;
-          ">他${others.length}件 →</a>
-        </div>` : ''
-
-      const popup = L.popup({
-        className: 'crime-popup',
-        maxWidth: 280,
-      }).setContent(`
-        <div style="
-          background: #111827; color: #e2e8f0;
-          padding: 12px; border-radius: 8px;
-          font-family: 'Noto Sans JP', sans-serif;
-          min-width: 200px;
-        ">
+        const popup = L.popup({
+          className: 'crime-popup',
+          maxWidth: 280,
+        }).setContent(`
           <div style="
-            display: inline-block; padding: 2px 8px;
-            background: ${color}33; color: ${color};
-            border: 1px solid ${color}66;
-            border-radius: 4px; font-size: 11px; margin-bottom: 8px;
-          ">${primary.data?.incident_type || 'その他'}</div>
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">
-            ${primary.title || '（タイトルなし）'}
+            background: #111827; color: #e2e8f0;
+            padding: 12px; border-radius: 8px;
+            font-family: 'Noto Sans JP', sans-serif;
+            min-width: 200px;
+          ">
+            <div style="
+              display: inline-block; padding: 2px 8px;
+              background: ${color}33; color: ${color};
+              border: 1px solid ${color}66;
+              border-radius: 4px; font-size: 11px; margin-bottom: 8px;
+            ">${primary.data?.incident_type || 'その他'}</div>
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">
+              ${primary.title || '（タイトルなし）'}
+            </div>
+            ${primary.address ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📍 ${primary.address}</div>` : ''}
+            ${dateLabel       ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📅 ${dateLabel}</div>` : ''}
+            <div style="font-size: 11px; margin-top: 6px;">
+              <span style="
+                padding: 1px 6px;
+                background: ${nation === '外国人' ? '#FF704333' : '#4FC3F733'};
+                color: ${nation === '外国人' ? '#FF7043' : '#4FC3F7'};
+                border-radius: 4px;
+              ">${nation}</span>
+            </div>
+            ${sourceHtml}
           </div>
-          ${primary.address ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📍 ${primary.address}</div>` : ''}
-          ${dateLabel       ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📅 ${dateLabel}</div>` : ''}
-          <div style="font-size: 11px; margin-top: 6px;">
-            <span style="
-              padding: 1px 6px;
-              background: ${nation === '外国人' ? '#FF704333' : '#4FC3F733'};
-              color: ${nation === '外国人' ? '#FF7043' : '#4FC3F7'};
-              border-radius: 4px;
-            ">${nation}</span>
-          </div>
-          ${sourceHtml}
-          ${othersHtml}
-        </div>
-      `)
+        `)
 
-      const marker = L.marker([primary.lat, primary.lng], { icon }).bindPopup(popup)
+        const marker = L.marker([primary.lat, primary.lng], { icon }).bindPopup(popup)
 
-      // ポップアップが開いたとき
-      marker.on('popupopen', async () => {
-        // ── ソースURL生存確認 ──────────────────────────────────────────────
+        // リンク切れ検出
         if (primary.source_url) {
-          const linkEl = document.getElementById(linkId) as HTMLAnchorElement | null
-          if (linkEl) {
+          const sourceUrl  = primary.source_url
+          const archiveUrl = primary.archive_url
+          marker.on('popupopen', async () => {
+            const linkEl = document.getElementById(linkId) as HTMLAnchorElement | null
+            if (!linkEl) return
             try {
-              await fetch(primary.source_url, {
+              await fetch(sourceUrl, {
                 method: 'HEAD',
                 mode:   'no-cors',
                 signal: AbortSignal.timeout(5000),
               })
             } catch {
-              if (primary.archive_url) {
-                linkEl.href        = primary.archive_url
+              if (archiveUrl) {
+                linkEl.href        = archiveUrl
                 linkEl.textContent = '📦 魚拓を確認（元リンク切れ）'
                 linkEl.style.color = '#fb923c'
               } else {
@@ -276,34 +290,50 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
                 linkEl.style.cursor = 'default'
               }
             }
-          }
+          })
         }
 
-        // ── 他○件リンクにクリックハンドラを付与 ──────────────────────────
-        if (others.length > 0) {
-          const othersBtn = document.getElementById(`others-btn-${primary.id}`)
-          if (othersBtn) {
-            // addEventListener は毎回新しい関数なので once:true で管理
-            othersBtn.addEventListener('click', (e) => {
-              e.preventDefault()
-              showOthers(primary, others)
-            }, { once: true })
-          }
-        }
-      })
+        marker.addTo(mapObjRef.current)
+        markersRef.current.push(marker)
 
-      // ポップアップが閉じたとき → 他件マーカーをすべて削除
-      marker.on('popupclose', () => {
-        tempMarkersRef.current.forEach(m => m.remove())
-        tempMarkersRef.current = []
-      })
+      // ──────────────────────────────────────────────────────────────────────
+      // 2〜20件: クリックで左上にカードグリッドを表示
+      // ──────────────────────────────────────────────────────────────────────
+      } else if (count <= 20) {
+        const marker = L.marker([primary.lat, primary.lng], {
+          icon,
+          bubblingMouseEvents: false,   // 地図のクリックに伝播させない
+        })
+        marker.on('click', () => setGroupPanel(sorted))
+        marker.addTo(mapObjRef.current)
+        markersRef.current.push(marker)
 
-      marker.addTo(map)
-      markersRef.current.push(marker)
+      // ──────────────────────────────────────────────────────────────────────
+      // 21件以上: 別タブで一覧ページを開く（最大100件）
+      // ──────────────────────────────────────────────────────────────────────
+      } else {
+        const marker = L.marker([primary.lat, primary.lng], {
+          icon,
+          bubblingMouseEvents: false,
+        })
+        marker.on('click', () => {
+          try {
+            localStorage.setItem('crime-map-group', JSON.stringify({
+              reports: sorted.slice(0, 100),
+              address: primary.address || '',
+              lat: primary.lat,
+              lng: primary.lng,
+            }))
+          } catch {}
+          window.open('/location', '_blank')
+        })
+        marker.addTo(mapObjRef.current)
+        markersRef.current.push(marker)
+      }
     })
   }, [reports, layerMode])
 
-  // バブルレイヤー更新
+  // ── バブルレイヤー更新 ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapObjRef.current) return
     const L = require('leaflet')
@@ -318,10 +348,9 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
     prefectureStats.forEach(s => {
       const ratio  = s.count_recognized / maxCount
       const radius = Math.max(10, Math.log(s.count_recognized + 1) * 7)
-      // 件数が多いほど赤、少ないほどオレンジ
       const r = Math.round(255)
       const g = Math.round(160 * (1 - ratio))
-      const b = Math.round(20 * (1 - ratio))
+      const b = Math.round(20  * (1 - ratio))
       const color = `rgb(${r},${g},${b})`
 
       const circle = L.circleMarker([s.lat, s.lng], {
@@ -375,5 +404,12 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
     })
   }, [prefectureStats, layerMode])
 
-  return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+      {groupPanel && (
+        <GroupPanel reports={groupPanel} onClose={() => setGroupPanel(null)} />
+      )}
+    </div>
+  )
 }

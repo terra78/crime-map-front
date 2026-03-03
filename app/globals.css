@@ -24,23 +24,3 @@ vercel-toolbar,
 [data-vercel-toolbar] {
   display: none !important;
 }
-
-/* 他○件ポップアップ（Leaflet permanent tooltip）*/
-.crime-popup-other.leaflet-tooltip {
-  background: #111827 !important;
-  border: 1px solid #1e2d40 !important;
-  border-radius: 8px !important;
-  color: #e2e8f0 !important;
-  padding: 10px 12px !important;
-  font-family: 'Noto Sans JP', sans-serif !important;
-  font-size: 12px !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
-  white-space: normal !important;
-  max-width: 220px !important;
-  line-height: 1.5 !important;
-  pointer-events: auto !important;
-}
-/* ツールチップの矢印（三角）を非表示 */
-.crime-popup-other.leaflet-tooltip::before {
-  display: none !important;
-}
