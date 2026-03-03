@@ -14,9 +14,12 @@ export type Report = {
     crime_category?: string
     crime_law?: string
     nationality_type?: string
+    original_report_id?: number
+    corrected_by_report?: number
   }
   site_type_id: number
-  status?: 'pending' | 'ai_approved' | 'human_approved' | 'rejected'
+  status?: 'pending' | 'ai_approved' | 'human_approved' | 'rejected' | 'corrected'
+  submitted_by?: string
   created_at?: string
 }
 
@@ -56,6 +59,16 @@ export async function fetchReports(params?: {
     return res.json()
   } catch {
     return []
+  }
+}
+
+export async function fetchReportById(id: number): Promise<Report | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports/${id}`)
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
   }
 }
 

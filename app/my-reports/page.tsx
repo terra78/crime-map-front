@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { fetchMyReports, updateMyReport, deleteMyReport, Report } from '../lib/api'
 import DatePicker from '../components/DatePicker'
@@ -17,6 +17,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   ai_approved:    { label: 'AI承認済み', color: '#22C55E', bg: '#22C55E22' },
   human_approved: { label: '承認済み',   color: '#22C55E', bg: '#22C55E22' },
   rejected:       { label: '却下',       color: '#EF4444', bg: '#EF444422' },
+  corrected:      { label: '訂正済み',   color: '#94A3B8', bg: '#94A3B822' },
 }
 
 const FALLBACK_INCIDENT_GROUPS = getIncidentGroups()
@@ -344,6 +345,9 @@ function EditModal({
 // ── メインページ ─────────────────────────────────────────────────────────────
 export default function MyReportsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editParam = searchParams.get('edit')   // ?edit={id} でモーダルを自動オープン
+
   const { getToken, isLoaded } = useAuth()
   const [reports, setReports]       = useState<Report[]>([])
   const [loading, setLoading]       = useState(true)
@@ -358,10 +362,18 @@ export default function MyReportsPage() {
       if (!tk) { setError('認証情報を取得できませんでした'); setLoading(false); return }
       setToken(tk)
       fetchMyReports(tk)
-        .then(data => { setReports(data); setLoading(false) })
+        .then(data => {
+          setReports(data)
+          setLoading(false)
+          // ?edit={id} があれば対象レポートのモーダルを自動オープン
+          if (editParam) {
+            const target = data.find(r => r.id === Number(editParam))
+            if (target) setEditTarget(target)
+          }
+        })
         .catch(() => { setError('データの取得に失敗しました'); setLoading(false) })
     })
-  }, [isLoaded])
+  }, [isLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = async (id: number) => {
     if (!token) return
@@ -427,8 +439,25 @@ export default function MyReportsPage() {
                 const incidentType = r.data?.incident_type || 'その他刑法犯'
                 const color  = getIncidentColor(incidentType)
                 const status = STATUS_CONFIG[r.status || 'pending']
+                const isCorrected = r.status === 'corrected'
                 return (
-                  <div key={r.id} style={{ background: '#111827', border: '1px solid #1e2d40', borderRadius: 10, padding: '14px 16px' }}>
+                  <div key={r.id} style={{ position: 'relative', background: '#111827', border: '1px solid #1e2d40', borderRadius: 10, padding: '14px 16px' }}>
+                    {/* 訂正済みオーバーレイ */}
+                    {isCorrected && (
+                      <div style={{
+                        position: 'absolute', inset: 0, borderRadius: 10,
+                        background: 'rgba(0,0,0,0.55)', zIndex: 5,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{
+                          fontSize: 18, fontWeight: 700, color: '#94a3b8',
+                          border: '2px solid #475569', borderRadius: 8,
+                          padding: '6px 18px', transform: 'rotate(-12deg)',
+                          letterSpacing: '0.12em', userSelect: 'none',
+                        }}>訂正済み</div>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ padding: '2px 8px', fontSize: 11, borderRadius: 4, background: `${color}22`, color, border: `1px solid ${color}66` }}>
                         {incidentType}

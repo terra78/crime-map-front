@@ -16,6 +16,7 @@ type Props = {
   prefectureStats?: PrefectureStat[]
   layerMode?: 'pins' | 'bubbles'
   searchTarget?: { lat: number; lng: number; zoom?: number } | null
+  currentUserId?: string | null
   onBoundsChange?: (bounds: {
     min_lat: number; max_lat: number
     min_lng: number; max_lng: number
@@ -113,7 +114,7 @@ function GroupPanel({ reports, onClose }: { reports: Report[]; onClose: () => vo
   )
 }
 
-export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, onBoundsChange }: Props) {
+export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, currentUserId, onBoundsChange }: Props) {
   const mapRef     = useRef<HTMLDivElement>(null)
   const mapObjRef  = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -224,11 +225,26 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       if (count === 1) {
         const dateLabel  = formatDate(primary.occurred_at)
         const linkId     = `src-link-${primary.id}`
+        const actionBtnId = `action-btn-${primary.id}`
         const sourceHtml = primary.source_url ? `
           <a id="${linkId}" href="${primary.source_url}" target="_blank" rel="noopener" style="
             display: inline-block; margin-top: 8px; font-size: 11px;
             color: #60a5fa; text-decoration: none;
           ">🔗 ソースを確認</a>` : ''
+
+        // 自分の投稿なら「編集」、他人なら「訂正申請」ボタン
+        const isOwn = !!currentUserId && primary.submitted_by === currentUserId
+        const actionBtnLabel = isOwn ? '✏️ 編集' : '📝 訂正申請'
+        const actionBtnColor = isOwn ? '#60a5fa' : '#fbbf24'
+        const actionBtnHtml = `
+          <button id="${actionBtnId}" style="
+            display: inline-block; margin-top: 8px; padding: 3px 10px;
+            background: transparent;
+            color: ${actionBtnColor};
+            border: 1px solid ${actionBtnColor}55;
+            border-radius: 4px; font-size: 11px; cursor: pointer;
+            font-family: 'Noto Sans JP', sans-serif;
+          ">${actionBtnLabel}</button>`
 
         const popup = L.popup({
           className: 'crime-popup',
@@ -260,38 +276,53 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
               ">${nation}</span>
             </div>
             ${sourceHtml}
+            ${actionBtnHtml}
           </div>
         `)
 
         const marker = L.marker([primary.lat, primary.lng], { icon }).bindPopup(popup)
 
-        // リンク切れ検出
-        if (primary.source_url) {
-          const sourceUrl  = primary.source_url
-          const archiveUrl = primary.archive_url
-          marker.on('popupopen', async () => {
+        // popupopen: リンク切れ検出 ＋ アクションボタンのクリックハンドラ登録
+        marker.on('popupopen', async () => {
+          // リンク切れ検出
+          if (primary.source_url) {
+            const sourceUrl  = primary.source_url
+            const archiveUrl = primary.archive_url
             const linkEl = document.getElementById(linkId) as HTMLAnchorElement | null
-            if (!linkEl) return
-            try {
-              await fetch(sourceUrl, {
-                method: 'HEAD',
-                mode:   'no-cors',
-                signal: AbortSignal.timeout(5000),
-              })
-            } catch {
-              if (archiveUrl) {
-                linkEl.href        = archiveUrl
-                linkEl.textContent = '📦 魚拓を確認（元リンク切れ）'
-                linkEl.style.color = '#fb923c'
-              } else {
-                linkEl.textContent = '⚠️ リンク切れ'
-                linkEl.style.color = '#ef4444'
-                linkEl.removeAttribute('href')
-                linkEl.style.cursor = 'default'
+            if (linkEl) {
+              try {
+                await fetch(sourceUrl, {
+                  method: 'HEAD',
+                  mode:   'no-cors',
+                  signal: AbortSignal.timeout(5000),
+                })
+              } catch {
+                if (archiveUrl) {
+                  linkEl.href        = archiveUrl
+                  linkEl.textContent = '📦 魚拓を確認（元リンク切れ）'
+                  linkEl.style.color = '#fb923c'
+                } else {
+                  linkEl.textContent = '⚠️ リンク切れ'
+                  linkEl.style.color = '#ef4444'
+                  linkEl.removeAttribute('href')
+                  linkEl.style.cursor = 'default'
+                }
               }
             }
-          })
-        }
+          }
+
+          // アクションボタン
+          const actionBtn = document.getElementById(actionBtnId) as HTMLButtonElement | null
+          if (actionBtn) {
+            actionBtn.onclick = () => {
+              if (isOwn) {
+                window.location.href = `/my-reports?edit=${primary.id}`
+              } else {
+                window.location.href = `/submit?correct=${primary.id}`
+              }
+            }
+          }
+        })
 
         marker.addTo(mapObjRef.current)
         markersRef.current.push(marker)

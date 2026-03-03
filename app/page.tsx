@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useCallback } from 'react'
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs'
+import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/nextjs'
 import {
   fetchReports, Report,
   fetchPrefectureStats, PrefectureStat,
@@ -17,6 +17,8 @@ const Map = dynamic(() => import('./components/Map'), { ssr: false })
 type SearchTarget = { lat: number; lng: number; zoom?: number } | null
 
 export default function Home() {
+  const { userId } = useAuth()
+
   // ───── 投稿ピン state ─────
   const [allReports, setAllReports] = useState<Report[]>([])
   const [loading, setLoading]       = useState(false)
@@ -158,6 +160,7 @@ export default function Home() {
             prefectureStats={prefectureStats}
             layerMode={layerMode}
             searchTarget={searchTarget}
+            currentUserId={userId ?? null}
           />
         )}
 

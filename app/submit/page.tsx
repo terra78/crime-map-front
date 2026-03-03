@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import DatePicker from '../components/DatePicker'
 import { getIncidentGroups, getCrimeCategory, getCrimeLaw } from '../lib/crimeTypes'
+import { fetchReportById } from '../lib/api'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -16,12 +17,18 @@ type LatLng = { lat: number; lng: number }
 
 const MARKER_HTML = `<div style="width:24px;height:24px;background:#FF7043;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`
 
-export default function SubmitPage() {
+function SubmitPageInner() {
   const router            = useRouter()
+  const searchParams      = useSearchParams()
   const { getToken, isSignedIn } = useAuth()
   const mapRef            = useRef<HTMLDivElement>(null)
   const mapObjRef         = useRef<any>(null)
   const markerRef         = useRef<any>(null)
+
+  // 訂正申請モード: ?correct={originalId}
+  const correctId = searchParams.get('correct')
+  const isCorrectMode = !!correctId
+  const [correctLoading, setCorrectLoading] = useState(isCorrectMode)
 
   // ── モード ──────────────────────────────────────────────────────────────────
   const [mode, setMode]           = useState<'url' | 'manual'>('url')
@@ -68,6 +75,31 @@ export default function SubmitPage() {
       .catch(() => {})
     return () => controller.abort()
   }, [])
+
+  // ── 訂正申請モード: 元投稿データを取得してフォームを初期化 ────────────────
+  useEffect(() => {
+    if (!isCorrectMode || !correctId) return
+    setCorrectLoading(true)
+    fetchReportById(Number(correctId))
+      .then(data => {
+        if (!data) { setError('元の投稿が見つかりませんでした'); return }
+        setForm(f => ({
+          ...f,
+          title:            data.title            || '',
+          description:      (data as any).description || '',
+          incident_type:    data.data?.incident_type     || f.incident_type,
+          nationality_type: data.data?.nationality_type  || '日本',
+          source_url:       data.source_url        || '',
+          occurred_at:      data.occurred_at       || '',
+          address:          data.address           || '',
+        }))
+        if (data.lat && data.lng) setLatlng({ lat: data.lat, lng: data.lng })
+        setExtracted(true)
+        setMode('manual')
+      })
+      .catch(() => setError('元の投稿の取得に失敗しました'))
+      .finally(() => setCorrectLoading(false))
+  }, [isCorrectMode, correctId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 地図の初期化 + マーカー更新（mapNeeded / latlng が変わるたびに実行）──
   useEffect(() => {
@@ -167,6 +199,10 @@ export default function SubmitPage() {
       const headers: HeadersInit = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
+      const extraData = isCorrectMode && correctId
+        ? { original_report_id: Number(correctId) }
+        : {}
+
       const res = await fetch(`${API_BASE}/api/reports`, {
         method: 'POST', headers,
         body: JSON.stringify({
@@ -183,6 +219,7 @@ export default function SubmitPage() {
             crime_category:   getCrimeCategory(form.incident_type),
             crime_law:        getCrimeLaw(form.incident_type),
             nationality_type: form.nationality_type,
+            ...extraData,
           },
         }),
       })
@@ -213,6 +250,13 @@ export default function SubmitPage() {
     secTitle:  { fontSize: 12, color: '#FF7043', marginBottom: 14, fontWeight: 600 },
   }
 
+  // ── 訂正モード読み込み中 ────────────────────────────────────────────────
+  if (correctLoading) return (
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 14, fontFamily: "'Noto Sans JP', sans-serif" }}>
+      元の投稿を読み込み中...
+    </div>
+  )
+
   // ── 成功画面 ─────────────────────────────────────────────────────────────
   if (success) return (
     <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -233,11 +277,25 @@ export default function SubmitPage() {
 
         {/* ヘッダー */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <button onClick={() => router.push('/')} style={{ background: 'none', border: '1px solid #1e2d40', borderRadius: 6, padding: '6px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
-            ← 地図に戻る
+          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid #1e2d40', borderRadius: 6, padding: '6px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
+            ← 戻る
           </button>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>情報を投稿する</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            {isCorrectMode ? '📝 訂正申請' : '情報を投稿する'}
+          </div>
+          {isCorrectMode && (
+            <span style={{ fontSize: 11, color: '#fbbf24', background: '#fbbf2420', border: '1px solid #fbbf2440', borderRadius: 4, padding: '2px 8px' }}>
+              #{correctId} の訂正
+            </span>
+          )}
         </div>
+
+        {/* 訂正申請バナー */}
+        {isCorrectMode && (
+          <div style={{ background: '#1a1400', border: '1px solid #fbbf2444', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#fbbf24' }}>
+            📝 <strong>訂正申請モード</strong> — 元の投稿内容を修正して送信してください。管理者が承認すると元の投稿は「訂正済み」になります。
+          </div>
+        )}
 
         {/* モード切替タブ */}
         <div style={{ display: 'flex', background: '#111827', border: '1px solid #1e2d40', borderRadius: 8, padding: 4, marginBottom: 20, gap: 4 }}>
@@ -431,17 +489,29 @@ export default function SubmitPage() {
               style={{
                 width: '100%', padding: '14px', border: 'none', borderRadius: 8,
                 fontSize: 15, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer',
-                background: submitting ? '#374151' : '#FF7043',
+                background: submitting ? '#374151' : (isCorrectMode ? '#d97706' : '#FF7043'),
                 color: 'white',
-                boxShadow: submitting ? 'none' : '0 4px 16px rgba(255,112,67,0.4)',
+                boxShadow: submitting ? 'none' : (isCorrectMode ? '0 4px 16px rgba(217,119,6,0.4)' : '0 4px 16px rgba(255,112,67,0.4)'),
               }}
             >
-              {submitting ? '送信中...' : '投稿する'}
+              {submitting ? '送信中...' : (isCorrectMode ? '📝 訂正申請を送信' : '投稿する')}
             </button>
           </>
         )}
 
       </div>
     </div>
+  )
+}
+
+export default function SubmitPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: '#0a0f1a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 14, fontFamily: "'Noto Sans JP', sans-serif" }}>
+        読み込み中...
+      </div>
+    }>
+      <SubmitPageInner />
+    </Suspense>
   )
 }
