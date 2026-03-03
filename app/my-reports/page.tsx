@@ -55,7 +55,7 @@ function EditModal({
     nationality_type: report.data?.nationality_type ?? '日本',
     address:          report.address ?? '',
     occurred_at:      report.occurred_at ?? '',
-    source_url:       report.data?.source_url ?? '',
+    source_url:       report.source_url ?? '',
   })
   const [saving, setSaving]                           = useState(false)
   const [err, setErr]                                 = useState('')
@@ -181,7 +181,6 @@ function EditModal({
         crime_category:   getCrimeCategory(form.incident_type),
         crime_law:        getCrimeLaw(form.incident_type),
         nationality_type: form.nationality_type,
-        source_url:       form.source_url || '',
       },
     })
     setSaving(false)
@@ -190,13 +189,13 @@ function EditModal({
         title:       form.title,
         address:     form.address,
         occurred_at: form.occurred_at,
+        source_url:  form.source_url || undefined,
         status:      'pending',
         lat:         latlng?.lat ?? report.lat,
         lng:         latlng?.lng ?? report.lng,
         data: {
           incident_type:    form.incident_type,
           nationality_type: form.nationality_type,
-          source_url:       form.source_url,
         },
       })
     } else {
@@ -451,8 +450,8 @@ export default function MyReportsPage() {
                       {r.created_at  && <span>🕒 投稿 {new Date(r.created_at).toLocaleDateString('ja-JP')}</span>}
                     </div>
 
-                    {r.data?.source_url && (
-                      <a href={r.data.source_url} target="_blank" rel="noopener noreferrer"
+                    {r.source_url && (
+                      <a href={r.source_url} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: '#60a5fa', textDecoration: 'none' }}>
                         🔗 ソースを確認
                       </a>

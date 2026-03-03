@@ -91,7 +91,8 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
     if (layerMode !== 'pins') return
 
     // ── 同一座標グループ化（小数点4桁 ≈ 約11m 精度でキー） ──────────────────
-    const grouped = new Map<string, Report[]>()
+    // ※ コンポーネント名が "Map" のため globalThis.Map で組み込みクラスを参照
+    const grouped = new globalThis.Map<string, Report[]>()
     reports.forEach(r => {
       const key = `${r.lat.toFixed(4)},${r.lng.toFixed(4)}`
       if (!grouped.has(key)) grouped.set(key, [])
