@@ -1,22 +1,22 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth, useUser } from '@clerk/nextjs'
 import { Report } from '../lib/api'
-import { formatDate } from '../components/Map'
+import ReportCard from '../components/ReportCard'
 
-const INCIDENT_COLORS: Record<string, string> = {
-  '交通事故': '#F59E0B',
-  '窃盗':    '#EF4444',
-  '暴行':    '#DC2626',
-  '詐欺':    '#8B5CF6',
-  'その他':  '#6B7280',
-}
+// ThreadPanel は Leaflet 依存なので dynamic import
+const ThreadPanel = dynamic(() => import('../components/ThreadPanel'), { ssr: false })
 
 export default function LocationPage() {
   const router  = useRouter()
-  const [reports, setReports] = useState<Report[]>([])
-  const [address, setAddress] = useState('')
+  const { userId, getToken } = useAuth()
+  const { user }             = useUser()
+  const [reports, setReports]           = useState<Report[]>([])
+  const [address, setAddress]           = useState('')
+  const [threadReport, setThreadReport] = useState<Report | null>(null)
 
   useEffect(() => {
     try {
@@ -41,8 +41,15 @@ export default function LocationPage() {
       color: '#e2e8f0',
       fontFamily: "'Noto Sans JP', sans-serif",
       padding: '24px 16px',
+      position: 'relative',
     }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{
+        maxWidth: 1200,
+        margin: '0 auto',
+        // コメントパネルが開いているときは右側を確保
+        paddingRight: threadReport ? 360 : 0,
+        transition: 'padding-right 0.2s ease',
+      }}>
 
         {/* ヘッダー */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 24 }}>
@@ -65,70 +72,24 @@ export default function LocationPage() {
           </div>
         </div>
 
-        {/* カードグリッド */}
+        {/* カードグリッド（共通 ReportCard を使用） */}
         {reports.length > 0 ? (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: 12,
           }}>
-            {reports.map(r => {
-              const color   = INCIDENT_COLORS[r.data?.incident_type || ''] || '#6B7280'
-              const nation  = r.data?.nationality_type || '不明'
-              const dateLbl = formatDate(r.occurred_at)
-              return (
-                <div key={r.id} style={{
-                  background: '#111827',
-                  border: '1px solid #1e2d40',
-                  borderRadius: 8,
-                  padding: '12px 14px',
-                }}>
-                  <div style={{
-                    display: 'inline-block', padding: '2px 8px',
-                    background: `${color}33`, color,
-                    border: `1px solid ${color}66`,
-                    borderRadius: 4, fontSize: 11, marginBottom: 8,
-                  }}>{r.data?.incident_type || 'その他'}</div>
-
-                  <div style={{
-                    fontSize: 13, fontWeight: 600,
-                    marginBottom: 4, lineHeight: 1.4,
-                  }}>{r.title || '（タイトルなし）'}</div>
-
-                  {r.address && (
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>
-                      📍 {r.address}
-                    </div>
-                  )}
-                  {dateLbl && (
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                      📅 {dateLbl}
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: 11 }}>
-                    <span style={{
-                      padding: '1px 6px',
-                      background: nation === '外国人' ? '#FF704333' : '#4FC3F733',
-                      color:      nation === '外国人' ? '#FF7043'   : '#4FC3F7',
-                      borderRadius: 4,
-                    }}>{nation}</span>
-                  </div>
-
-                  {r.source_url && (
-                    <a
-                      href={r.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'inline-block', marginTop: 8,
-                        fontSize: 11, color: '#60a5fa', textDecoration: 'none',
-                      }}
-                    >🔗 ソースを確認</a>
-                  )}
-                </div>
-              )
-            })}
+            {reports.map(r => (
+              <ReportCard
+                key={r.id}
+                report={r}
+                currentUserId={userId ?? null}
+                isLoggedIn={!!userId}
+                isAdmin={false}
+                onOpenThread={r => setThreadReport(r)}
+                width="100%"
+              />
+            ))}
           </div>
         ) : (
           <div style={{ textAlign: 'center', color: '#64748b', marginTop: 80, fontSize: 14 }}>
@@ -137,6 +98,18 @@ export default function LocationPage() {
         )}
 
       </div>
+
+      {/* コメントスライドパネル */}
+      {threadReport && (
+        <ThreadPanel
+          report={threadReport}
+          onClose={() => setThreadReport(null)}
+          currentUserId={userId ?? null}
+          currentUserName={user?.fullName ?? null}
+          currentUserAvatar={user?.imageUrl ?? null}
+          getToken={getToken}
+        />
+      )}
     </div>
   )
 }

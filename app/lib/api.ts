@@ -206,6 +206,7 @@ export type AdminReport = {
   ai_reason: string | null
   data: Record<string, string>
   created_at: string
+  occurred_at: string | null
 }
 
 export type AdminStats = {
@@ -303,6 +304,21 @@ export async function updateAdminProfile(token: string, email: string): Promise<
       method: 'PATCH',
       headers: { ...adminHeaders(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
+    })
+    return res.ok
+  } catch { return false }
+}
+
+export async function adminUpdateQueueItem(
+  token: string,
+  id: number,
+  nationality_type: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/queue/${id}`, {
+      method: 'PATCH',
+      headers: { ...adminHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nationality_type }),
     })
     return res.ok
   } catch { return false }

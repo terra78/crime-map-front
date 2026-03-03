@@ -129,6 +129,8 @@ function ContactModal({ onClose }: { onClose: () => void }) {
 
 type Props = {
   reports: Report[]
+  /** フィルタリング前の全件（種別フィルターの件数表示に使う） */
+  allReports: Report[]
   filter: { crime_category: string; nationality_type: string }
   onFilterChange: (f: { crime_category: string; nationality_type: string }) => void
   // レイヤー切り替え
@@ -145,7 +147,7 @@ type Props = {
 }
 
 export default function Sidebar({
-  reports, filter, onFilterChange,
+  reports, allReports, filter, onFilterChange,
   layerMode, onLayerModeChange,
   prefYear, prefYears, onPrefYearChange,
   prefCategory, prefCategories, onPrefCategoryChange,
@@ -162,7 +164,8 @@ export default function Sidebar({
   const total = reports.length
 
   // 第2階層（crime_category）ごとの件数を集計
-  const categoryCounts = reports.reduce((acc, r) => {
+  // ※ フィルター選択後も件数が変わらないよう allReports（全件）から集計する
+  const categoryCounts = allReports.reduce((acc, r) => {
     // crime_category が保存されていない旧データは incident_type から導出
     const cat =
       r.data?.crime_category ||
@@ -171,6 +174,8 @@ export default function Sidebar({
     acc[cat] = (acc[cat] || 0) + 1
     return acc
   }, {} as Record<string, number>)
+  // 全件の合計（フィルター件数バッジ用）
+  const totalAll = allReports.length
 
   return (
     <>
@@ -320,7 +325,7 @@ export default function Sidebar({
                     }}
                   >
                     <span style={{ flex: 1 }}>全て</span>
-                    <span style={{ fontFamily: 'monospace', color: '#475569' }}>{total}</span>
+                    <span style={{ fontFamily: 'monospace', color: '#475569' }}>{totalAll}</span>
                   </button>
 
                   {/* 第2階層カテゴリ */}

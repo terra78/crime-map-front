@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Report, PrefectureStat, adminDeleteReport } from '../lib/api'
+import ReportCard from './ReportCard'
 
 const INCIDENT_COLORS: Record<string, string> = {
   '交通事故': '#F59E0B',
@@ -44,33 +45,23 @@ function sortByDate(reports: Report[]): Report[] {
 
 // ── 同一地点グループパネル（2〜20件） ───────────────────────────────────────
 function GroupPanel({
-  reports, onClose, onSelect, isAdmin, adminToken, onAdminDelete,
+  reports, onClose, onSelect, currentUserId, isLoggedIn, isAdmin, adminToken, onAdminDelete,
 }: {
   reports: Report[]
   onClose: () => void
   onSelect?: (r: Report) => void
+  currentUserId?: string | null
+  isLoggedIn?: boolean
   isAdmin?: boolean
   adminToken?: string | null
   onAdminDelete?: (id: number) => void
 }) {
-  async function handleDelete(id: number, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!confirm(`#${id} を物理削除しますか？\nこの操作は取り消せません。`)) return
-    const ok = await adminDeleteReport(adminToken!, id)
-    if (ok) {
-      onAdminDelete?.(id)
-      onClose()
-    } else {
-      alert('削除に失敗しました')
-    }
-  }
-
   return (
     <div style={{
       position: 'absolute', top: 8, left: 8, zIndex: 500,
       background: '#0a0f1a', border: '1px solid #1e2d40',
       borderRadius: 10, padding: 12,
-      maxWidth: 560, maxHeight: 'calc(100% - 80px)',
+      maxWidth: 580, maxHeight: 'calc(100% - 80px)',
       overflowY: 'auto',
       boxShadow: '0 4px 24px rgba(0,0,0,0.7)',
       fontFamily: "'Noto Sans JP', sans-serif",
@@ -90,70 +81,21 @@ function GroupPanel({
         >✕</button>
       </div>
 
-      {/* カードグリッド */}
+      {/* カードグリッド（共通 ReportCard を使用） */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {reports.map(r => {
-          const color   = INCIDENT_COLORS[r.data?.incident_type || ''] || '#6B7280'
-          const nation  = r.data?.nationality_type || '不明'
-          const dateLbl = formatDate(r.occurred_at)
-          return (
-            <div key={r.id}
-              onClick={() => { onSelect?.(r); onClose() }}
-              style={{
-                width: 250, background: '#111827',
-                border: '1px solid #1e2d40', borderRadius: 6,
-                padding: '10px 12px', boxSizing: 'border-box',
-                cursor: onSelect ? 'pointer' : 'default',
-                position: 'relative',
-              }}>
-              {/* 管理者専用削除ボタン */}
-              {isAdmin && adminToken && (
-                <button
-                  onClick={(e) => handleDelete(r.id, e)}
-                  title="物理削除（管理者）"
-                  style={{
-                    position: 'absolute', top: 6, right: 6,
-                    background: '#ef444422', border: '1px solid #ef444466',
-                    borderRadius: 4, color: '#ef4444',
-                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                    padding: '1px 5px', lineHeight: 1.4,
-                  }}
-                >✕</button>
-              )}
-              {/* 記事ID */}
-              <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>#{r.id}</div>
-              <div style={{
-                display: 'inline-block', padding: '2px 7px',
-                background: `${color}33`, color,
-                border: `1px solid ${color}66`,
-                borderRadius: 4, fontSize: 10, marginBottom: dateLbl ? 2 : 6,
-              }}>{r.data?.incident_type || 'その他'}</div>
-              {dateLbl && (
-                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>{dateLbl}</div>
-              )}
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 3, lineHeight: 1.4, color: '#e2e8f0' }}>
-                {r.title || '（タイトルなし）'}
-              </div>
-              {r.address && (
-                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>📍 {r.address}</div>
-              )}
-              <div style={{ fontSize: 10 }}>
-                <span style={{
-                  padding: '1px 5px',
-                  background: nation === '外国人' ? '#FF704333' : '#4FC3F733',
-                  color:      nation === '外国人' ? '#FF7043'   : '#4FC3F7',
-                  borderRadius: 4,
-                }}>{nation}</span>
-              </div>
-              {r.source_url && (
-                <a href={r.source_url} target="_blank" rel="noopener noreferrer" style={{
-                  display: 'inline-block', marginTop: 6, fontSize: 10,
-                  color: '#60a5fa', textDecoration: 'none',
-                }}>🔗 ソースを確認</a>
-              )}
-            </div>
-          )
-        })}
+        {reports.map(r => (
+          <ReportCard
+            key={r.id}
+            report={r}
+            currentUserId={currentUserId}
+            isLoggedIn={isLoggedIn}
+            isAdmin={isAdmin}
+            adminToken={adminToken}
+            onAdminDelete={onAdminDelete}
+            onOpenThread={onSelect}
+            onClose={onClose}
+          />
+        ))}
       </div>
     </div>
   )
@@ -287,11 +229,11 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             color: #60a5fa; text-decoration: none;
           ">🔗 ソースを確認</a>` : ''
 
-        // 自分の投稿なら「編集」、他人なら「訂正申請」ボタン
+        // 自分の投稿なら「編集」、他人なら「訂正申請」ボタン（未ログインは非表示）
         const isOwn = !!currentUserId && primary.submitted_by === currentUserId
         const actionBtnLabel = isOwn ? '✏️ 編集' : '📝 訂正申請'
         const actionBtnColor = isOwn ? '#60a5fa' : '#fbbf24'
-        const actionBtnHtml = `
+        const actionBtnHtml = currentUserId ? `
           <button id="${actionBtnId}" style="
             display: inline-block; margin-top: 8px; padding: 3px 10px;
             background: transparent;
@@ -299,7 +241,7 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             border: 1px solid ${actionBtnColor}55;
             border-radius: 4px; font-size: 11px; cursor: pointer;
             font-family: 'Noto Sans JP', sans-serif;
-          ">${actionBtnLabel}</button>`
+          ">${actionBtnLabel}</button>` : ''
 
         // スレッドボタン
         const threadBtnHtml = `
@@ -417,12 +359,11 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             }
           }
 
-          // 管理者削除ボタン
+          // 管理者削除ボタン（確認ダイアログなし）
           if (isAdmin && adminToken) {
             const delBtn = document.getElementById(adminDelId) as HTMLButtonElement | null
             if (delBtn) {
               delBtn.onclick = async () => {
-                if (!confirm(`#${primary.id} を物理削除しますか？\nこの操作は取り消せません。`)) return
                 const ok = await adminDeleteReport(adminToken, primary.id)
                 if (ok) {
                   marker.closePopup()
@@ -555,6 +496,8 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
           reports={groupPanel}
           onClose={() => setGroupPanel(null)}
           onSelect={r => { setGroupPanel(null); onOpenThreadRef.current?.(r) }}
+          currentUserId={currentUserId}
+          isLoggedIn={!!currentUserId}
           isAdmin={isAdmin}
           adminToken={adminToken}
           onAdminDelete={id => { setGroupPanel(null); onAdminDeleteRef.current?.(id) }}

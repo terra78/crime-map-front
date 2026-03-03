@@ -4,8 +4,10 @@ import { useState, useCallback } from 'react'
 import {
   fetchAdminQueue, fetchAdminStats,
   adminApprove, adminReject, adminRejectExcludeKeywords,
+  adminUpdateQueueItem,
   AdminReport, AdminStats,
 } from '../lib/api'
+import { NATIONALITY_GROUPS } from '../lib/nationalityData'
 
 // ── スタイル定数 ─────────────────────────────────────────────────────────────
 const BG   = '#0a0f1a'
@@ -35,6 +37,89 @@ function StatCard({ label, value, color }: { label: string; value: number; color
       <div style={{ fontSize: 28, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>{label}</div>
     </div>
+  )
+}
+
+// ── 国籍インライン編集コンポーネント ──────────────────────────────────────────
+function NationalityEditor({
+  reportId,
+  token,
+  current,
+  onSaved,
+}: {
+  reportId: number
+  token: string
+  current: string
+  onSaved: (newValue: string) => void
+}) {
+  const [editing, setEditing]   = useState(false)
+  const [value, setValue]       = useState(current)
+  const [saving, setSaving]     = useState(false)
+
+  if (!editing) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: MUTED }}>🏳️ {current || '（未設定）'}</span>
+        <button
+          onClick={() => setEditing(true)}
+          style={{
+            background: 'none', border: '1px solid #1e3a5f',
+            borderRadius: 4, color: '#4FC3F7', fontSize: 11,
+            cursor: 'pointer', padding: '1px 8px',
+          }}
+        >編集</button>
+      </span>
+    )
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    const ok = await adminUpdateQueueItem(token, reportId, value)
+    setSaving(false)
+    if (ok) {
+      onSaved(value)
+      setEditing(false)
+    } else {
+      alert('保存に失敗しました')
+    }
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <select
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        style={{
+          background: '#0a0f1a', border: `1px solid ${BORDER}`,
+          borderRadius: 4, color: TEXT, fontSize: 12,
+          padding: '3px 6px', outline: 'none', cursor: 'pointer',
+        }}
+      >
+        {NATIONALITY_GROUPS.map(g => (
+          <optgroup key={g.label} label={g.label}>
+            {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        style={{
+          background: saving ? '#1e3a5f' : '#4FC3F7',
+          color: saving ? '#475569' : '#0a0f1a',
+          border: 'none', borderRadius: 4, fontSize: 11,
+          fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
+          padding: '3px 10px',
+        }}
+      >{saving ? '保存中…' : '保存'}</button>
+      <button
+        onClick={() => { setEditing(false); setValue(current) }}
+        style={{
+          background: 'none', border: 'none', color: MUTED,
+          fontSize: 11, cursor: 'pointer', padding: 0,
+        }}
+      >キャンセル</button>
+    </span>
   )
 }
 
@@ -96,6 +181,15 @@ export default function AdminPage() {
       setBulkResult(`✅ ${res.rejected_count}件を却下しました`)
       load(token)   // キューと統計を更新
     }
+  }
+
+  /** 国籍フィールドをキュー内で更新（再フェッチなし） */
+  const handleNationalitySaved = (reportId: number, newValue: string) => {
+    setQueue(q => q?.map(r =>
+      r.id === reportId
+        ? { ...r, data: { ...r.data, nationality_type: newValue } }
+        : r
+    ) ?? null)
   }
 
   // ── ログイン前 ──────────────────────────────────────────────────────────────
@@ -257,11 +351,23 @@ export default function AdminPage() {
             {r.data?.address && (
               <div style={{ color: MUTED }}>📍 {r.data.address}</div>
             )}
-            {r.data?.nationality_type && (
-              <div style={{ color: MUTED }}>🏳️ {r.data.nationality_type}</div>
+            {/* 国籍インライン編集 */}
+            <div>
+              <NationalityEditor
+                reportId={r.id}
+                token={token}
+                current={r.data?.nationality_type || '不明'}
+                onSaved={newVal => handleNationalitySaved(r.id, newVal)}
+              />
+            </div>
+            {/* 発生年月日 */}
+            {r.occurred_at && (
+              <div style={{ color: MUTED, fontSize: 12 }}>
+                📅 発生日: {r.occurred_at}
+              </div>
             )}
             <div style={{ color: MUTED, fontSize: 12 }}>
-              📅 投稿: {new Date(r.created_at).toLocaleString('ja-JP')}
+              🕐 投稿: {new Date(r.created_at).toLocaleString('ja-JP')}
             </div>
           </div>
 

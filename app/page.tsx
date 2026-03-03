@@ -161,6 +161,7 @@ export default function Home() {
       {/* サイドバー */}
       <Sidebar
         reports={filteredReports}
+        allReports={allReports}
         filter={filter}
         onFilterChange={setFilter}
         layerMode={layerMode}
@@ -298,16 +299,18 @@ export default function Home() {
             }}
           />
         </SignedIn>
-        <a href="/submit" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '8px 16px',
-          background: '#FF7043', color: 'white',
-          borderRadius: 6, textDecoration: 'none',
-          fontSize: 13, fontWeight: 600,
-          boxShadow: '0 2px 12px rgba(255,112,67,0.4)',
-        }}>
-          ＋ 投稿する
-        </a>
+        <SignedIn>
+          <a href="/submit" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 16px',
+            background: '#FF7043', color: 'white',
+            borderRadius: 6, textDecoration: 'none',
+            fontSize: 13, fontWeight: 600,
+            boxShadow: '0 2px 12px rgba(255,112,67,0.4)',
+          }}>
+            ＋ 投稿する
+          </a>
+        </SignedIn>
       </div>
 
       {/* 右下：データについて */}
