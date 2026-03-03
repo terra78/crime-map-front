@@ -189,8 +189,8 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       const color  = INCIDENT_COLORS[primary.data?.incident_type || ''] || '#6B7280'
       const nation = primary.data?.nationality_type || '不明'
 
-      // ピン内テキスト：2件以上は件数、1件は国籍略称
-      const innerText     = count >= 2 ? String(count) : (nation === '外国人' ? '外' : nation === '日本人' ? '日' : '?')
+      // ピン内テキスト：件数を表示（常に数字）
+      const innerText     = String(count)
       const innerFontSize = count >= 10 ? '9px' : '11px'
       const innerWeight   = count >= 2 ? '700' : '400'
 
