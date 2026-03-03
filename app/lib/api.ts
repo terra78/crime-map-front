@@ -230,6 +230,21 @@ export async function fetchAdminQueue(token: string): Promise<AdminReport[] | nu
   }
 }
 
+/** Clerk JWT を送り、ADMIN_TOKEN を受け取る（管理者ログイン） */
+export async function adminClerkLogin(clerkToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/clerk-login`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${clerkToken}` },
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.admin_token ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchAdminStats(token: string): Promise<AdminStats | null> {
   try {
     const res = await fetch(`${API_BASE}/api/admin/stats`, { headers: adminHeaders(token) })

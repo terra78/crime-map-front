@@ -7,7 +7,7 @@ import {
   fetchReports, Report,
   fetchPrefectureStats, PrefectureStat,
   fetchPrefectureYears, fetchPrefectureCategories,
-  fetchAdminStats,
+  adminClerkLogin,
 } from './lib/api'
 import Sidebar from './components/Sidebar'
 import { INCIDENT_TO_CATEGORY } from './lib/crimeTypes'
@@ -62,17 +62,18 @@ export default function Home() {
     }).catch(() => setLoading(false))
   }, [])
 
-  // ───── 管理者判定（localStorage の adminToken を検証）─────
+  // ───── 管理者判定（Clerk ログイン済みユーザーを /api/admin/clerk-login で検証）─────
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null
-    if (!token) return
-    fetchAdminStats(token).then(stats => {
-      if (stats !== null) {
+    if (!userId) return
+    getToken().then(async clerkToken => {
+      if (!clerkToken) return
+      const token = await adminClerkLogin(clerkToken)
+      if (token) {
         setIsAdmin(true)
         setAdminToken(token)
       }
     })
-  }, [])
+  }, [userId])
 
   // ───── 都道府県統計メタ（年・罪種一覧）を初回取得 ─────
   useEffect(() => {
