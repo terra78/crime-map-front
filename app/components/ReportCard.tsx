@@ -62,7 +62,8 @@ export default function ReportCard({
 
   function handleAction(e: React.MouseEvent) {
     e.stopPropagation()
-    if (isOwn) {
+    // 管理者 or 自分の投稿 → 直接編集、それ以外 → 訂正申請
+    if (isAdmin || isOwn) {
       window.location.href = `/my-reports?edit=${r.id}`
     } else {
       window.location.href = `/submit?correct=${r.id}`
@@ -88,21 +89,6 @@ export default function ReportCard({
       position: 'relative',
       fontFamily: "'Noto Sans JP', sans-serif",
     }}>
-      {/* 管理者専用削除ボタン */}
-      {isAdmin && adminToken && (
-        <button
-          onClick={handleDelete}
-          title="物理削除（管理者）"
-          style={{
-            position: 'absolute', top: 6, right: 6,
-            background: '#ef444422', border: '1px solid #ef444466',
-            borderRadius: 4, color: '#ef4444',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            padding: '1px 5px', lineHeight: 1.4,
-          }}
-        >✕</button>
-      )}
-
       {/* 記事ID */}
       <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>#{r.id}</div>
 
@@ -158,19 +144,19 @@ export default function ReportCard({
 
       {/* アクションボタン行 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-        {/* 訂正申請 / 編集（ログイン済みのみ） */}
-        {isLoggedIn && (
+        {/* 編集（管理者 or 自分の投稿） / 訂正申請（ログイン済みの他者投稿） */}
+        {(isAdmin || isLoggedIn) && (
           <button
             onClick={handleAction}
             style={{
               padding: '3px 10px',
               background: 'transparent',
-              color: isOwn ? '#60a5fa' : '#fbbf24',
-              border: `1px solid ${isOwn ? '#60a5fa55' : '#fbbf2455'}`,
+              color: (isAdmin || isOwn) ? '#60a5fa' : '#fbbf24',
+              border: `1px solid ${(isAdmin || isOwn) ? '#60a5fa55' : '#fbbf2455'}`,
               borderRadius: 4, fontSize: 11, cursor: 'pointer',
               fontFamily: "'Noto Sans JP', sans-serif",
             }}
-          >{isOwn ? '✏️ 編集' : '📝 訂正申請'}</button>
+          >{(isAdmin || isOwn) ? '✏️ 編集' : '📝 訂正申請'}</button>
         )}
 
         {/* コメント（常に表示 ─ 未ログインはパネル内でログインボタンを表示） */}
@@ -185,6 +171,20 @@ export default function ReportCard({
               fontFamily: "'Noto Sans JP', sans-serif",
             }}
           >💬 コメント</button>
+        )}
+
+        {/* 管理者専用削除ボタン（右下 ─ ポップアップの×と被らない位置） */}
+        {isAdmin && adminToken && (
+          <button
+            onClick={handleDelete}
+            style={{
+              padding: '3px 10px',
+              background: '#ef444411', border: '1px solid #ef444455',
+              borderRadius: 4, color: '#ef4444',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              fontFamily: "'Noto Sans JP', sans-serif",
+            }}
+          >🗑️ 削除</button>
         )}
       </div>
     </div>

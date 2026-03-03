@@ -229,11 +229,12 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             color: #60a5fa; text-decoration: none;
           ">🔗 ソースを確認</a>` : ''
 
-        // 自分の投稿なら「編集」、他人なら「訂正申請」ボタン（未ログインは非表示）
+        // 自分の投稿 or 管理者なら「編集」、他人なら「訂正申請」（未ログインかつ非管理者は非表示）
         const isOwn = !!currentUserId && primary.submitted_by === currentUserId
-        const actionBtnLabel = isOwn ? '✏️ 編集' : '📝 訂正申請'
-        const actionBtnColor = isOwn ? '#60a5fa' : '#fbbf24'
-        const actionBtnHtml = currentUserId ? `
+        const useEditMode = isOwn || isAdmin
+        const actionBtnLabel = useEditMode ? '✏️ 編集' : '📝 訂正申請'
+        const actionBtnColor = useEditMode ? '#60a5fa' : '#fbbf24'
+        const actionBtnHtml = (currentUserId || isAdmin) ? `
           <button id="${actionBtnId}" style="
             display: inline-block; margin-top: 8px; padding: 3px 10px;
             background: transparent;
@@ -253,16 +254,15 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             font-family: 'Noto Sans JP', sans-serif;
           ">💬 コメント</button>`
 
-        // 管理者専用削除ボタン（ポップアップ右上）
+        // 管理者専用削除ボタン（アクション行右下 ─ ポップアップ閉じる × と被らない）
         const adminDelHtml = isAdmin ? `
-          <button id="${adminDelId}" title="物理削除（管理者）" style="
-            position: absolute; top: 4px; right: 4px;
-            background: #ef444422; border: 1px solid #ef444466;
+          <button id="${adminDelId}" style="
+            display: inline-block; margin-top: 8px; margin-left: 6px; padding: 3px 10px;
+            background: #ef444411; border: 1px solid #ef444455;
             border-radius: 4px; color: #ef4444;
-            font-size: 12px; font-weight: 700; cursor: pointer;
-            padding: 1px 6px; line-height: 1.4;
+            font-size: 11px; font-weight: 700; cursor: pointer;
             font-family: 'Noto Sans JP', sans-serif;
-          ">✕</button>` : ''
+          ">🗑️ 削除</button>` : ''
 
         const popup = L.popup({
           className: 'crime-popup',
@@ -274,7 +274,6 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             font-family: 'Noto Sans JP', sans-serif;
             min-width: 200px; position: relative;
           ">
-            ${adminDelHtml}
             <div style="font-size: 10px; color: #475569; margin-bottom: 4px;">#${primary.id}</div>
             <div style="
               display: inline-block; padding: 2px 8px;
@@ -302,7 +301,7 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             </div>
             ${sourceHtml}
             <div style="display:flex; flex-wrap:wrap; gap:0;">
-              ${actionBtnHtml}${threadBtnHtml}
+              ${actionBtnHtml}${threadBtnHtml}${adminDelHtml}
             </div>
           </div>
         `)
@@ -342,7 +341,7 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
           const actionBtn = document.getElementById(actionBtnId) as HTMLButtonElement | null
           if (actionBtn) {
             actionBtn.onclick = () => {
-              if (isOwn) {
+              if (isAdmin || isOwn) {
                 window.location.href = `/my-reports?edit=${primary.id}`
               } else {
                 window.location.href = `/submit?correct=${primary.id}`
