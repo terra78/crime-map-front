@@ -227,9 +227,9 @@ export default function Home() {
         <SignedIn>
           <a href="/my-reports" style={{
             padding: '7px 12px',
-            background: 'transparent',
-            color: '#94a3b8',
-            border: '1px solid #1e2d40',
+            background: '#111827',
+            color: '#ffffff',
+            border: '1px solid #374151',
             borderRadius: 6, fontSize: 13,
             textDecoration: 'none',
             whiteSpace: 'nowrap',
