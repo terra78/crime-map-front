@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { fetchMyReports, updateMyReport, deleteMyReport, Report } from '../lib/api'
@@ -342,8 +342,8 @@ function EditModal({
   )
 }
 
-// ── メインページ ─────────────────────────────────────────────────────────────
-export default function MyReportsPage() {
+// ── メインページ（内側）─────────────────────────────────────────────────────
+function MyReportsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editParam = searchParams.get('edit')   // ?edit={id} でモーダルを自動オープン
@@ -519,5 +519,22 @@ export default function MyReportsPage() {
         />
       )}
     </div>
+  )
+}
+
+// ── エクスポート（Suspense バウンダリで useSearchParams をラップ）────────────
+export default function MyReportsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh', background: '#0a0f1a',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#64748b', fontSize: 14, fontFamily: "'Noto Sans JP', sans-serif",
+      }}>
+        読み込み中...
+      </div>
+    }>
+      <MyReportsPageInner />
+    </Suspense>
   )
 }
