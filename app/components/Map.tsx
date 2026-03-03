@@ -274,7 +274,8 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       // 1件: 通常のポップアップ
       // ──────────────────────────────────────────────────────────────────────
       if (count === 1) {
-        const dateLabel   = formatDate(primary.occurred_at)
+        const dateLabel    = formatDate(primary.occurred_at)
+        const createdLabel = !dateLabel ? formatDate(primary.created_at?.slice(0, 10) ?? null) : null
         const linkId      = `src-link-${primary.id}`
         const actionBtnId = `action-btn-${primary.id}`
         const threadBtnId = `thread-btn-${primary.id}`
@@ -339,7 +340,12 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
               border: 1px solid ${color}66;
               border-radius: 4px; font-size: 11px; margin-bottom: 2px;
             ">${primary.data?.incident_type || 'その他'}</div>
-            ${dateLabel ? `<div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">${dateLabel}</div>` : ''}
+            ${dateLabel
+              ? `<div style="font-size: 10px; color: #94a3b8; margin-bottom: 6px;">📅 発生日 ${dateLabel}</div>`
+              : createdLabel
+                ? `<div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">投稿日 ${createdLabel}</div>`
+                : ''
+            }
             <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">
               ${primary.title || '（タイトルなし）'}
             </div>

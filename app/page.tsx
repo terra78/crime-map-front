@@ -259,7 +259,7 @@ export default function Home() {
 
       {/* 右上：認証 + 投稿ボタン */}
       <div style={{
-        position: 'absolute', top: 16, right: 16, zIndex: 1001,
+        position: 'absolute', top: 16, right: 16, zIndex: 999,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         {/* 機能④: ログインボタンをマイ投稿と同スタイルに */}
@@ -311,7 +311,7 @@ export default function Home() {
 
       {/* 右下：データについて */}
       <div style={{
-        position: 'absolute', bottom: 32, right: 16, zIndex: 1001,
+        position: 'absolute', bottom: 32, right: 16, zIndex: 999,
         fontSize: 10, color: '#334155', textAlign: 'right',
       }}>
         ※ ユーザー投稿および公開情報に基づくデータです

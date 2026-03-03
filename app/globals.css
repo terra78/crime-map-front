@@ -18,6 +18,12 @@ html, body { height: 100%; background: #0a0f1a; }
   font-family: 'Noto Sans JP', sans-serif;
 }
 
+/* Leaflet コントロール類をスレッドパネル（z-index:1100）の下に */
+.leaflet-control-zoom,
+.leaflet-control-attribution {
+  z-index: 998 !important;
+}
+
 /* Vercel Toolbar を非表示 */
 vercel-toolbar,
 #vercel-toolbar,

@@ -234,7 +234,7 @@ export default function ThreadPanel({
       background: '#0a0f1a',
       borderLeft: '1px solid #1e2d40',
       display: 'flex', flexDirection: 'column',
-      zIndex: 600,
+      zIndex: 1100,
       fontFamily: "'Noto Sans JP', sans-serif",
       boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
     }}>
@@ -349,7 +349,16 @@ export default function ThreadPanel({
                 fontFamily: "'Noto Sans JP', sans-serif",
               }}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 6 }}>
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'none', border: 'none',
+                  color: '#475569', fontSize: 12, cursor: 'pointer', padding: 0,
+                }}
+              >
+                キャンセル
+              </button>
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !newText.trim()}
