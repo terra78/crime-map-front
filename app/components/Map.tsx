@@ -43,7 +43,28 @@ function sortByDate(reports: Report[]): Report[] {
 }
 
 // ── 同一地点グループパネル（2〜20件） ───────────────────────────────────────
-function GroupPanel({ reports, onClose, onSelect }: { reports: Report[]; onClose: () => void; onSelect?: (r: Report) => void }) {
+function GroupPanel({
+  reports, onClose, onSelect, isAdmin, adminToken, onAdminDelete,
+}: {
+  reports: Report[]
+  onClose: () => void
+  onSelect?: (r: Report) => void
+  isAdmin?: boolean
+  adminToken?: string | null
+  onAdminDelete?: (id: number) => void
+}) {
+  async function handleDelete(id: number, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm(`#${id} を物理削除しますか？\nこの操作は取り消せません。`)) return
+    const ok = await adminDeleteReport(adminToken!, id)
+    if (ok) {
+      onAdminDelete?.(id)
+      onClose()
+    } else {
+      alert('削除に失敗しました')
+    }
+  }
+
   return (
     <div style={{
       position: 'absolute', top: 8, left: 8, zIndex: 500,
@@ -83,21 +104,38 @@ function GroupPanel({ reports, onClose, onSelect }: { reports: Report[]; onClose
                 border: '1px solid #1e2d40', borderRadius: 6,
                 padding: '10px 12px', boxSizing: 'border-box',
                 cursor: onSelect ? 'pointer' : 'default',
+                position: 'relative',
               }}>
+              {/* 管理者専用削除ボタン */}
+              {isAdmin && adminToken && (
+                <button
+                  onClick={(e) => handleDelete(r.id, e)}
+                  title="物理削除（管理者）"
+                  style={{
+                    position: 'absolute', top: 6, right: 6,
+                    background: '#ef444422', border: '1px solid #ef444466',
+                    borderRadius: 4, color: '#ef4444',
+                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    padding: '1px 5px', lineHeight: 1.4,
+                  }}
+                >✕</button>
+              )}
+              {/* 記事ID */}
+              <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>#{r.id}</div>
               <div style={{
                 display: 'inline-block', padding: '2px 7px',
                 background: `${color}33`, color,
                 border: `1px solid ${color}66`,
-                borderRadius: 4, fontSize: 10, marginBottom: 6,
+                borderRadius: 4, fontSize: 10, marginBottom: dateLbl ? 2 : 6,
               }}>{r.data?.incident_type || 'その他'}</div>
+              {dateLbl && (
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>{dateLbl}</div>
+              )}
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 3, lineHeight: 1.4, color: '#e2e8f0' }}>
                 {r.title || '（タイトルなし）'}
               </div>
               {r.address && (
                 <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>📍 {r.address}</div>
-              )}
-              {dateLbl && (
-                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>📅 {dateLbl}</div>
               )}
               <div style={{ fontSize: 10 }}>
                 <span style={{
@@ -430,7 +468,7 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
         markersRef.current.push(marker)
       }
     })
-  }, [reports, layerMode])
+  }, [reports, layerMode, isAdmin, adminToken])
 
   // ── バブルレイヤー更新 ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -511,6 +549,9 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
           reports={groupPanel}
           onClose={() => setGroupPanel(null)}
           onSelect={r => { setGroupPanel(null); onOpenThreadRef.current?.(r) }}
+          isAdmin={isAdmin}
+          adminToken={adminToken}
+          onAdminDelete={id => { setGroupPanel(null); onAdminDeleteRef.current?.(id) }}
         />
       )}
     </div>
