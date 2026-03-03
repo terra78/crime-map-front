@@ -193,3 +193,18 @@ export async function adminReject(token: string, id: number): Promise<boolean> {
   })
   return res.ok
 }
+
+export async function adminRejectExcludeKeywords(
+  token: string
+): Promise<{ rejected_count: number } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/reject/exclude-keywords`, {
+      method: 'POST',
+      headers: adminHeaders(token),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}

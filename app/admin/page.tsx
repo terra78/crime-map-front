@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import {
   fetchAdminQueue, fetchAdminStats,
-  adminApprove, adminReject,
+  adminApprove, adminReject, adminRejectExcludeKeywords,
   AdminReport, AdminStats,
 } from '../lib/api'
 
@@ -46,7 +46,9 @@ export default function AdminPage() {
   const [stats, setStats]       = useState<AdminStats | null>(null)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const [actioning, setActioning] = useState<number | null>(null)
+  const [actioning, setActioning]       = useState<number | null>(null)
+  const [bulkRejecting, setBulkRejecting] = useState(false)
+  const [bulkResult, setBulkResult]       = useState<string>('')
 
   const load = useCallback(async (tk: string) => {
     setLoading(true)
@@ -80,6 +82,20 @@ export default function AdminPage() {
     const ok = await adminReject(token, id)
     if (ok) setQueue(q => q?.filter(r => r.id !== id) ?? null)
     setActioning(null)
+  }
+
+  const handleBulkRejectExclude = async () => {
+    if (!confirm('裁判・考察記事キーワードに一致する承認待ち記事をすべて却下します。よろしいですか？')) return
+    setBulkRejecting(true)
+    setBulkResult('')
+    const res = await adminRejectExcludeKeywords(token)
+    setBulkRejecting(false)
+    if (res === null) {
+      setBulkResult('❌ 実行に失敗しました')
+    } else {
+      setBulkResult(`✅ ${res.rejected_count}件を却下しました`)
+      load(token)   // キューと統計を更新
+    }
   }
 
   // ── ログイン前 ──────────────────────────────────────────────────────────────
@@ -142,7 +158,24 @@ export default function AdminPage() {
       {/* ヘッダー */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>📋 モデレーション管理</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {bulkResult && (
+            <span style={{ fontSize: 12, color: bulkResult.startsWith('✅') ? '#34d399' : '#f87171' }}>
+              {bulkResult}
+            </span>
+          )}
+          <button
+            onClick={handleBulkRejectExclude}
+            disabled={bulkRejecting}
+            style={{
+              padding: '7px 14px', background: bulkRejecting ? '#374151' : '#7f1d1d',
+              color: '#fca5a5', border: '1px solid #991b1b',
+              borderRadius: 6, fontSize: 13,
+              cursor: bulkRejecting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            {bulkRejecting ? '処理中...' : '🚫 裁判/考察を一括却下'}
+          </button>
           <button
             onClick={() => load(token)}
             style={{
