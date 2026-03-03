@@ -1,8 +1,131 @@
 'use client'
 
 import { useState } from 'react'
-import { Report } from '../lib/api'
+import { Report, submitContact } from '../lib/api'
 import { ALL_CATEGORIES, CATEGORY_COLORS, INCIDENT_TO_CATEGORY } from '../lib/crimeTypes'
+
+const CONTACT_TYPES = [
+  '記事の削除依頼(記事IDを添えてください)',
+  'ソースのリンク切れ報告',
+  '機能要望',
+  'その他',
+]
+
+function ContactModal({ onClose }: { onClose: () => void }) {
+  const [contactType, setContactType] = useState(CONTACT_TYPES[0])
+  const [detail, setDetail]           = useState('')
+  const [sending, setSending]         = useState(false)
+  const [sent, setSent]               = useState(false)
+
+  async function handleSend() {
+    if (!detail.trim()) return
+    setSending(true)
+    const ok = await submitContact({ contact_type: contactType, detail: detail.trim() })
+    setSending(false)
+    if (ok) { setSent(true) } else { alert('送信に失敗しました。時間をおいて再度お試しください。') }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.65)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      fontFamily: "'Noto Sans JP', sans-serif",
+    }}>
+      <div style={{
+        background: '#0a0f1a', border: '1px solid #1e2d40',
+        borderRadius: 10, padding: 24, width: 420, maxWidth: 'calc(100vw - 32px)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>お問い合わせ</div>
+          <button onClick={onClose} style={{
+            background: 'none', border: '1px solid #1e2d40', borderRadius: 4,
+            color: '#64748b', fontSize: 14, cursor: 'pointer', padding: '2px 8px',
+          }}>✕</button>
+        </div>
+
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 14, color: '#e2e8f0', marginBottom: 4 }}>送信しました</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>お問い合わせありがとうございます</div>
+            <button onClick={onClose} style={{
+              padding: '8px 24px', background: '#111827',
+              color: '#e2e8f0', border: '1px solid #374151',
+              borderRadius: 6, fontSize: 13, cursor: 'pointer',
+            }}>閉じる</button>
+          </div>
+        ) : (
+          <>
+            {/* 内容リストボックス */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 6, letterSpacing: '0.05em' }}>
+                内容
+              </label>
+              <select
+                value={contactType}
+                onChange={e => setContactType(e.target.value)}
+                style={{
+                  width: '100%', background: '#111827', border: '1px solid #1e2d40',
+                  borderRadius: 6, color: '#e2e8f0', fontSize: 12,
+                  padding: '8px 10px', outline: 'none',
+                }}
+              >
+                {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            {/* 詳細フォーム */}
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 6, letterSpacing: '0.05em' }}>
+                詳細
+              </label>
+              <textarea
+                value={detail}
+                onChange={e => setDetail(e.target.value)}
+                rows={5}
+                placeholder="詳細を入力してください..."
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: '#111827', border: '1px solid #1e2d40',
+                  borderRadius: 6, color: '#e2e8f0', fontSize: 12,
+                  padding: '10px', resize: 'vertical', outline: 'none',
+                  fontFamily: "'Noto Sans JP', sans-serif",
+                }}
+              />
+              <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>
+                記事IDは記事のポップアップの左上に表示されている#付きの数字です
+              </div>
+            </div>
+
+            {/* ボタン */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={onClose} style={{
+                padding: '8px 16px', background: 'none',
+                color: '#64748b', border: '1px solid #1e2d40',
+                borderRadius: 6, fontSize: 13, cursor: 'pointer',
+              }}>キャンセル</button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !detail.trim()}
+                style={{
+                  padding: '8px 20px',
+                  background: sending || !detail.trim() ? '#1e3a5f' : '#4FC3F7',
+                  color: sending || !detail.trim() ? '#475569' : '#0a0f1a',
+                  border: 'none', borderRadius: 6, fontSize: 13,
+                  fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {sending ? '送信中…' : '送信'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 type Props = {
   reports: Report[]
@@ -28,7 +151,8 @@ export default function Sidebar({
   prefCategory, prefCategories, onPrefCategoryChange,
   prefLoading,
 }: Props) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed]         = useState(false)
+  const [showContactModal, setShowContact] = useState(false)
 
   const jp    = reports.filter(r => r.data?.nationality_type === '日本').length
   const fg    = reports.filter(r => {
@@ -49,6 +173,8 @@ export default function Sidebar({
   }, {} as Record<string, number>)
 
   return (
+    <>
+    {showContactModal && <ContactModal onClose={() => setShowContact(false)} />}
     <div style={{
       position: 'absolute', top: 0, left: 0, bottom: 0,
       width: collapsed ? '48px' : '280px',
@@ -227,27 +353,18 @@ export default function Sidebar({
                 </div>
               </div>
 
-              {/* 凡例 */}
+              {/* お問い合わせリンク */}
               <div style={{ padding: '12px', marginTop: 'auto', borderTop: '1px solid #1e2d40' }}>
-                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, letterSpacing: '0.1em' }}>
-                  凡例
-                </div>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{
-                      display: 'inline-block', width: 10, height: 10,
-                      background: '#111827', border: '2px solid #4FC3F7', borderRadius: '50%',
-                    }} />
-                    <span style={{ fontSize: 10, color: '#64748b' }}>日本人</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{
-                      display: 'inline-block', width: 10, height: 10,
-                      background: '#111827', border: '2px solid #FF7043', borderRadius: '50%',
-                    }} />
-                    <span style={{ fontSize: 10, color: '#64748b' }}>外国人</span>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setShowContact(true)}
+                  style={{
+                    width: '100%', background: 'none', border: '1px solid #1e2d40',
+                    borderRadius: 6, color: '#64748b', fontSize: 11,
+                    padding: '8px', cursor: 'pointer', textAlign: 'center',
+                  }}
+                >
+                  📬 お問い合わせ
+                </button>
               </div>
             </>
           )}
@@ -360,5 +477,6 @@ export default function Sidebar({
         </div>
       )}
     </div>
+    </>
   )
 }

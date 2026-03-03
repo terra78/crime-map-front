@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Report, PrefectureStat } from '../lib/api'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Report, PrefectureStat, adminDeleteReport } from '../lib/api'
 
 const INCIDENT_COLORS: Record<string, string> = {
   '交通事故': '#F59E0B',
@@ -17,6 +17,10 @@ type Props = {
   layerMode?: 'pins' | 'bubbles'
   searchTarget?: { lat: number; lng: number; zoom?: number } | null
   currentUserId?: string | null
+  isAdmin?: boolean
+  adminToken?: string | null
+  onAdminDelete?: (id: number) => void
+  onOpenThread?: (report: Report) => void
   onBoundsChange?: (bounds: {
     min_lat: number; max_lat: number
     min_lng: number; max_lng: number
@@ -39,7 +43,7 @@ function sortByDate(reports: Report[]): Report[] {
 }
 
 // ── 同一地点グループパネル（2〜20件） ───────────────────────────────────────
-function GroupPanel({ reports, onClose }: { reports: Report[]; onClose: () => void }) {
+function GroupPanel({ reports, onClose, onSelect }: { reports: Report[]; onClose: () => void; onSelect?: (r: Report) => void }) {
   return (
     <div style={{
       position: 'absolute', top: 8, left: 8, zIndex: 500,
@@ -72,11 +76,14 @@ function GroupPanel({ reports, onClose }: { reports: Report[]; onClose: () => vo
           const nation  = r.data?.nationality_type || '不明'
           const dateLbl = formatDate(r.occurred_at)
           return (
-            <div key={r.id} style={{
-              width: 250, background: '#111827',
-              border: '1px solid #1e2d40', borderRadius: 6,
-              padding: '10px 12px', boxSizing: 'border-box',
-            }}>
+            <div key={r.id}
+              onClick={() => { onSelect?.(r); onClose() }}
+              style={{
+                width: 250, background: '#111827',
+                border: '1px solid #1e2d40', borderRadius: 6,
+                padding: '10px 12px', boxSizing: 'border-box',
+                cursor: onSelect ? 'pointer' : 'default',
+              }}>
               <div style={{
                 display: 'inline-block', padding: '2px 7px',
                 background: `${color}33`, color,
@@ -114,12 +121,18 @@ function GroupPanel({ reports, onClose }: { reports: Report[]; onClose: () => vo
   )
 }
 
-export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, currentUserId, onBoundsChange }: Props) {
+export default function Map({ reports, prefectureStats = [], layerMode = 'pins', searchTarget, currentUserId, isAdmin, adminToken, onAdminDelete, onOpenThread, onBoundsChange }: Props) {
   const mapRef     = useRef<HTMLDivElement>(null)
   const mapObjRef  = useRef<any>(null)
   const markersRef = useRef<any[]>([])
   const bubblesRef = useRef<any[]>([])
   const [groupPanel, setGroupPanel] = useState<Report[] | null>(null)
+
+  // onOpenThread / onAdminDelete を ref で保持（stale closure 回避）
+  const onOpenThreadRef  = useRef(onOpenThread)
+  const onAdminDeleteRef = useRef(onAdminDelete)
+  useEffect(() => { onOpenThreadRef.current = onOpenThread }, [onOpenThread])
+  useEffect(() => { onAdminDeleteRef.current = onAdminDelete }, [onAdminDelete])
 
   // ── 地図初期化 ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -223,9 +236,12 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
       // 1件: 通常のポップアップ
       // ──────────────────────────────────────────────────────────────────────
       if (count === 1) {
-        const dateLabel  = formatDate(primary.occurred_at)
-        const linkId     = `src-link-${primary.id}`
+        const dateLabel   = formatDate(primary.occurred_at)
+        const linkId      = `src-link-${primary.id}`
         const actionBtnId = `action-btn-${primary.id}`
+        const threadBtnId = `thread-btn-${primary.id}`
+        const adminDelId  = `admin-del-${primary.id}`
+
         const sourceHtml = primary.source_url ? `
           <a id="${linkId}" href="${primary.source_url}" target="_blank" rel="noopener" style="
             display: inline-block; margin-top: 8px; font-size: 11px;
@@ -246,6 +262,27 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             font-family: 'Noto Sans JP', sans-serif;
           ">${actionBtnLabel}</button>`
 
+        // スレッドボタン
+        const threadBtnHtml = `
+          <button id="${threadBtnId}" style="
+            display: inline-block; margin-top: 8px; margin-left: 6px; padding: 3px 10px;
+            background: transparent; color: #94a3b8;
+            border: 1px solid #1e2d4088;
+            border-radius: 4px; font-size: 11px; cursor: pointer;
+            font-family: 'Noto Sans JP', sans-serif;
+          ">💬 コメント</button>`
+
+        // 管理者専用削除ボタン（ポップアップ右上）
+        const adminDelHtml = isAdmin ? `
+          <button id="${adminDelId}" title="物理削除（管理者）" style="
+            position: absolute; top: 4px; right: 4px;
+            background: #ef444422; border: 1px solid #ef444466;
+            border-radius: 4px; color: #ef4444;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            padding: 1px 6px; line-height: 1.4;
+            font-family: 'Noto Sans JP', sans-serif;
+          ">✕</button>` : ''
+
         const popup = L.popup({
           className: 'crime-popup',
           maxWidth: 280,
@@ -254,19 +291,21 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             background: #111827; color: #e2e8f0;
             padding: 12px; border-radius: 8px;
             font-family: 'Noto Sans JP', sans-serif;
-            min-width: 200px;
+            min-width: 200px; position: relative;
           ">
+            ${adminDelHtml}
+            <div style="font-size: 10px; color: #475569; margin-bottom: 4px;">#${primary.id}</div>
             <div style="
               display: inline-block; padding: 2px 8px;
               background: ${color}33; color: ${color};
               border: 1px solid ${color}66;
-              border-radius: 4px; font-size: 11px; margin-bottom: 8px;
+              border-radius: 4px; font-size: 11px; margin-bottom: 2px;
             ">${primary.data?.incident_type || 'その他'}</div>
+            ${dateLabel ? `<div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">${dateLabel}</div>` : ''}
             <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">
               ${primary.title || '（タイトルなし）'}
             </div>
             ${primary.address ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📍 ${primary.address}</div>` : ''}
-            ${dateLabel       ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">📅 ${dateLabel}</div>` : ''}
             <div style="font-size: 11px; margin-top: 6px;">
               <span style="
                 padding: 1px 6px;
@@ -276,13 +315,15 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
               ">${nation}</span>
             </div>
             ${sourceHtml}
-            ${actionBtnHtml}
+            <div style="display:flex; flex-wrap:wrap; gap:0;">
+              ${actionBtnHtml}${threadBtnHtml}
+            </div>
           </div>
         `)
 
         const marker = L.marker([primary.lat, primary.lng], { icon }).bindPopup(popup)
 
-        // popupopen: リンク切れ検出 ＋ アクションボタンのクリックハンドラ登録
+        // popupopen: リンク切れ検出 ＋ 各ボタンのクリックハンドラ登録
         marker.on('popupopen', async () => {
           // リンク切れ検出
           if (primary.source_url) {
@@ -311,7 +352,7 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
             }
           }
 
-          // アクションボタン
+          // アクションボタン（編集 / 訂正申請）
           const actionBtn = document.getElementById(actionBtnId) as HTMLButtonElement | null
           if (actionBtn) {
             actionBtn.onclick = () => {
@@ -319,6 +360,33 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
                 window.location.href = `/my-reports?edit=${primary.id}`
               } else {
                 window.location.href = `/submit?correct=${primary.id}`
+              }
+            }
+          }
+
+          // コメントスレッドボタン
+          const threadBtn = document.getElementById(threadBtnId) as HTMLButtonElement | null
+          if (threadBtn) {
+            threadBtn.onclick = () => {
+              marker.closePopup()
+              onOpenThreadRef.current?.(primary)
+            }
+          }
+
+          // 管理者削除ボタン
+          if (isAdmin && adminToken) {
+            const delBtn = document.getElementById(adminDelId) as HTMLButtonElement | null
+            if (delBtn) {
+              delBtn.onclick = async () => {
+                if (!confirm(`#${primary.id} を物理削除しますか？\nこの操作は取り消せません。`)) return
+                const ok = await adminDeleteReport(adminToken, primary.id)
+                if (ok) {
+                  marker.closePopup()
+                  marker.remove()
+                  onAdminDeleteRef.current?.(primary.id)
+                } else {
+                  alert('削除に失敗しました')
+                }
               }
             }
           }
@@ -439,7 +507,11 @@ export default function Map({ reports, prefectureStats = [], layerMode = 'pins',
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
       {groupPanel && (
-        <GroupPanel reports={groupPanel} onClose={() => setGroupPanel(null)} />
+        <GroupPanel
+          reports={groupPanel}
+          onClose={() => setGroupPanel(null)}
+          onSelect={r => { setGroupPanel(null); onOpenThreadRef.current?.(r) }}
+        />
       )}
     </div>
   )

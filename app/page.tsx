@@ -2,22 +2,25 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useCallback } from 'react'
-import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/nextjs'
+import { SignedIn, SignedOut, SignInButton, UserButton, useAuth, useUser } from '@clerk/nextjs'
 import {
   fetchReports, Report,
   fetchPrefectureStats, PrefectureStat,
   fetchPrefectureYears, fetchPrefectureCategories,
+  fetchAdminStats,
 } from './lib/api'
 import Sidebar from './components/Sidebar'
 import { INCIDENT_TO_CATEGORY } from './lib/crimeTypes'
 
 // Leafletはサーバーサイドレンダリング不可なのでdynamic import
-const Map = dynamic(() => import('./components/Map'), { ssr: false })
+const Map         = dynamic(() => import('./components/Map'),         { ssr: false })
+const ThreadPanel = dynamic(() => import('./components/ThreadPanel'), { ssr: false })
 
 type SearchTarget = { lat: number; lng: number; zoom?: number } | null
 
 export default function Home() {
-  const { userId } = useAuth()
+  const { userId, getToken } = useAuth()
+  const { user }             = useUser()
 
   // ───── 投稿ピン state ─────
   const [allReports, setAllReports] = useState<Report[]>([])
@@ -26,6 +29,13 @@ export default function Home() {
     crime_category: '全て',
     nationality_type: '全て',
   })
+
+  // ───── 管理者 state ─────
+  const [isAdmin, setIsAdmin]     = useState(false)
+  const [adminToken, setAdminToken] = useState<string | null>(null)
+
+  // ───── スレッドパネル state ─────
+  const [threadReport, setThreadReport] = useState<Report | null>(null)
 
   // ───── 地図検索 state ─────
   const [searchQuery,  setSearchQuery]  = useState('')
@@ -50,6 +60,18 @@ export default function Home() {
       setAllReports(data)
       setLoading(false)
     }).catch(() => setLoading(false))
+  }, [])
+
+  // ───── 管理者判定（localStorage の adminToken を検証）─────
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null
+    if (!token) return
+    fetchAdminStats(token).then(stats => {
+      if (stats !== null) {
+        setIsAdmin(true)
+        setAdminToken(token)
+      }
+    })
   }, [])
 
   // ───── 都道府県統計メタ（年・罪種一覧）を初回取得 ─────
@@ -101,7 +123,6 @@ export default function Home() {
   // ───── 投稿ピン フィルタリング ─────
   const filteredReports = allReports.filter(r => {
     if (filter.crime_category !== '全て') {
-      // crime_category が保存されていない旧データは incident_type から導出
       const cat =
         r.data?.crime_category ||
         INCIDENT_TO_CATEGORY[r.data?.incident_type ?? ''] ||
@@ -118,6 +139,17 @@ export default function Home() {
     }
     return true
   })
+
+  // ───── 管理者削除コールバック（件数を allReports から除外）─────
+  const handleAdminDelete = useCallback((id: number) => {
+    setAllReports(prev => prev.filter(r => r.id !== id))
+    if (threadReport?.id === id) setThreadReport(null)
+  }, [threadReport])
+
+  // ───── スレッドパネルを開く ─────
+  const handleOpenThread = useCallback((report: Report) => {
+    setThreadReport(report)
+  }, [])
 
   return (
     <div style={{
@@ -161,6 +193,22 @@ export default function Home() {
             layerMode={layerMode}
             searchTarget={searchTarget}
             currentUserId={userId ?? null}
+            isAdmin={isAdmin}
+            adminToken={adminToken}
+            onAdminDelete={handleAdminDelete}
+            onOpenThread={handleOpenThread}
+          />
+        )}
+
+        {/* スレッドパネル */}
+        {threadReport && (
+          <ThreadPanel
+            report={threadReport}
+            onClose={() => setThreadReport(null)}
+            currentUserId={userId ?? null}
+            currentUserName={user?.fullName ?? null}
+            currentUserAvatar={user?.imageUrl ?? null}
+            getToken={getToken}
           />
         )}
 
@@ -214,14 +262,16 @@ export default function Home() {
         position: 'absolute', top: 16, right: 16, zIndex: 1001,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
+        {/* 機能④: ログインボタンをマイ投稿と同スタイルに */}
         <SignedOut>
           <SignInButton mode="modal">
             <button style={{
               padding: '7px 14px',
-              background: 'transparent',
-              color: '#94a3b8',
-              border: '1px solid #1e2d40',
+              background: '#111827',
+              color: '#ffffff',
+              border: '1px solid #374151',
               borderRadius: 6, fontSize: 13, cursor: 'pointer',
+              fontWeight: 600,
             }}>
               ログイン
             </button>

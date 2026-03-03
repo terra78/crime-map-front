@@ -144,6 +144,56 @@ export async function fetchPrefectureCategories(): Promise<string[]> {
   return res.json()
 }
 
+// ── Comments API ─────────────────────────────────────────────────────────────
+
+export type Comment = {
+  id: number
+  report_id: number
+  user_id: string
+  user_name: string | null
+  user_avatar: string | null
+  content: string
+  parent_id: number | null
+  created_at: string
+}
+
+export async function fetchComments(reportId: number): Promise<Comment[]> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports/${reportId}/comments`)
+    if (!res.ok) return []
+    return res.json()
+  } catch { return [] }
+}
+
+export async function postComment(
+  reportId: number,
+  token: string,
+  body: { content: string; user_name?: string; user_avatar?: string; parent_id?: number },
+): Promise<Comment | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports/${reportId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+// ── Contact API ───────────────────────────────────────────────────────────────
+
+export async function submitContact(body: { contact_type: string; detail: string }): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return res.ok
+  } catch { return false }
+}
+
 // ── Admin API ────────────────────────────────────────────────────────────────
 
 export type AdminReport = {
@@ -220,4 +270,35 @@ export async function adminRejectExcludeKeywords(
   } catch {
     return null
   }
+}
+
+export type AdminProfile = { id: number; email: string; created_at: string }
+
+export async function fetchAdminProfile(token: string): Promise<AdminProfile | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/profile`, { headers: adminHeaders(token) })
+    if (!res.ok) return null
+    return res.json()
+  } catch { return null }
+}
+
+export async function updateAdminProfile(token: string, email: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/profile`, {
+      method: 'PATCH',
+      headers: { ...adminHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return res.ok
+  } catch { return false }
+}
+
+export async function adminDeleteReport(token: string, id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/reports/${id}`, {
+      method: 'DELETE',
+      headers: adminHeaders(token),
+    })
+    return res.ok
+  } catch { return false }
 }
