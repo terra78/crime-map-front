@@ -7,12 +7,13 @@ export type Report = {
   lng: number
   address: string | null
   occurred_at: string | null
+  source_url: string | null
+  archive_url: string | null
   data: {
     incident_type?: string
     crime_category?: string
     crime_law?: string
     nationality_type?: string
-    source_url?: string
   }
   site_type_id: number
   status?: 'pending' | 'ai_approved' | 'human_approved' | 'rejected'
